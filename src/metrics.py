@@ -1,7 +1,7 @@
 """Pure eval metrics over run rows (dicts). No I/O, so they are easy to unit-test.
 
 Each row needs: id, category, expected_behavior, behavior, expected_sources,
-retrieved_doc_ids, retrieved_chunk_ids (ranked), answer, stop_reason; optionally gold_chunks, correct.
+retrieved_doc_ids, retrieved_chunk_ids (ranked), answer, stop_reason; optionally gold_chunks, correct, split.
 """
 
 from __future__ import annotations
@@ -119,10 +119,15 @@ def forbidden_metrics(rows: list[Row]) -> dict[str, Any]:
     }
 
 
-def per_category(rows: list[Row]) -> dict[str, dict[str, Any]]:
+NO_GROUP = "(none)"
+
+
+def per_group(rows: list[Row], key: str) -> dict[str, dict[str, Any]]:
+    """Metrics per value of `key` (e.g. category, split), in first-seen order.
+    Rows without the key are grouped under "(none)"."""
     groups: dict[str, list[Row]] = defaultdict(list)
     for r in rows:
-        groups[r["category"]].append(r)
+        groups[r.get(key) or NO_GROUP].append(r)
     result: dict[str, dict[str, Any]] = {}
     for cat, rs in groups.items():
         retrieval = retrieval_metrics(rs)
@@ -141,6 +146,10 @@ def per_category(rows: list[Row]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def per_category(rows: list[Row]) -> dict[str, dict[str, Any]]:
+    return per_group(rows, "category")
+
+
 def percentile(values: list[float], pct: float) -> float | None:
     """Nearest-rank percentile."""
     if not values:
@@ -152,7 +161,7 @@ def percentile(values: list[float], pct: float) -> float | None:
 
 def summarize(rows: list[Row]) -> dict[str, Any]:
     latencies = [float(r["latency_ms"]) for r in rows]
-    return {
+    summary: dict[str, Any] = {
         "n": len(rows),
         "retrieval": retrieval_metrics(rows),
         "section_retrieval": section_metrics(rows),
@@ -168,3 +177,6 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
             "output": sum(r.get("output_tokens", 0) for r in rows),
         },
     }
+    if any(r.get("split") for r in rows):
+        summary["per_split"] = per_group(rows, "split")
+    return summary

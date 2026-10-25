@@ -10,8 +10,10 @@ from src.metrics import (
     forbidden_phrases,
     hand_label_accuracy,
     per_category,
+    per_group,
     percentile,
     retrieval_metrics,
+    summarize,
 )
 
 
@@ -68,6 +70,40 @@ def test_behavior_accuracy_and_per_category():
     assert cats["out_of_scope"]["behavior_acc"] == 0.5
     assert cats["out_of_scope"]["recall"] is None
     assert cats["direct"]["recall"] == 1.0
+
+
+def test_per_category_handles_distractor():
+    rows = [
+        _row("q53", "distractor", ["01", "07"], ["01"]),
+        _row("q55", "distractor", ["10"], ["10"], expected_behavior="handoff", behavior="answer"),
+        _row("q01", "direct", ["01"], ["01"]),
+    ]
+    cats = per_category(rows)
+    assert list(cats) == ["distractor", "direct"]  # first-seen order
+    assert cats["distractor"]["n"] == 2
+    assert cats["distractor"]["behavior_acc"] == 0.5
+    assert cats["distractor"]["recall"] == pytest.approx(0.75)
+
+
+def test_per_group_puts_rows_without_key_under_none():
+    rows = [
+        {**_row("q01", "direct", [], []), "split": None},
+        {**_row("q51", "paraphrase", [], []), "split": "heldout_m2"},
+        _row("q02", "direct", [], []),  # no split field at all
+    ]
+    groups = per_group(rows, "split")
+    assert {k: g["n"] for k, g in groups.items()} == {"(none)": 2, "heldout_m2": 1}
+
+
+def _full_row(id_, category, split=None):
+    return {**_row(id_, category, [], []), "split": split, "stop_reason": "end_turn", "latency_ms": 100}
+
+
+def test_summarize_adds_per_split_only_when_present():
+    assert "per_split" not in summarize([_full_row("q01", "direct")])
+    m = summarize([_full_row("q51", "distractor", "heldout_m2"), _full_row("q52", "direct", "heldout_m2")])
+    assert m["per_split"]["heldout_m2"]["n"] == 2
+    assert m["per_category"]["distractor"]["n"] == 1
 
 
 def test_hand_label_accuracy_skips_unlabeled_rows():

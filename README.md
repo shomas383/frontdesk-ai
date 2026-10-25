@@ -52,6 +52,8 @@ python -m src.answer "60分の全身整体はいくらですか？"
 
 # 3. Run the eval set (use --limit 5 for a quick smoke run)
 python -m src.eval --name baseline
+#    Held-out set (reported per category and per `split`):
+python -m src.eval --name heldout --questions eval/questions_m2_heldout.jsonl
 
 # Unit tests (no DB, API or model needed)
 pytest

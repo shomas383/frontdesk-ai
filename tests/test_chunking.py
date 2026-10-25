@@ -1,3 +1,5 @@
+import pytest
+
 from src.chunking import load_tenant_chunks, split_markdown
 from src.config import DATA_DIR, DEFAULT_TENANT
 
@@ -55,18 +57,40 @@ def test_real_news_doc_has_four_dated_sections():
     assert chunks[0].section.startswith("2026年10月15日")
 
 
-def test_eval_gold_chunks_exist_and_are_within_sources():
+QUESTION_FILES = ["questions.jsonl", "questions_m2_heldout.jsonl"]
+
+
+def _questions(name):
     import json
 
     from src.config import EVAL_DIR
 
+    return [json.loads(line) for line in (EVAL_DIR / name).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+@pytest.mark.parametrize("name", QUESTION_FILES)
+def test_eval_gold_chunks_exist_and_are_within_sources(name):
     chunk_ids = {c.chunk_id for c in load_tenant_chunks(DATA_DIR / DEFAULT_TENANT / "docs")}
-    for line in (EVAL_DIR / "questions.jsonl").read_text(encoding="utf-8").splitlines():
-        q = json.loads(line)
+    for q in _questions(name):
         gold = q.get("gold_chunks", [])
         # sources without gold is allowed when the docs don't answer the question (q41)
         assert set(gold) <= chunk_ids, q["id"]
         assert {g.split("#")[0] for g in gold} <= set(q["sources"]), q["id"]
+
+
+def test_eval_question_ids_are_unique_across_files():
+    ids = [q["id"] for name in QUESTION_FILES for q in _questions(name)]
+    assert len(ids) == len(set(ids))
+
+
+def test_heldout_questions_carry_split():
+    assert {q.get("split") for q in _questions("questions_m2_heldout.jsonl")} == {"heldout_m2"}
+
+
+def test_real_faq_doc_has_one_chunk_per_question():
+    chunks = [c for c in load_tenant_chunks(DATA_DIR / DEFAULT_TENANT / "docs") if c.doc_id == "06_faq"]
+    assert len(chunks) == 12
+    assert "06_faq#支払い方法" in {c.chunk_id for c in chunks}
 
 
 def test_real_menu_doc_carries_tax_note_in_every_chunk():

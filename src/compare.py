@@ -14,7 +14,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.eval import load_rows, refresh_gold_chunks, resummarize, summary_path, write_rows
+from src.eval import (
+    load_rows,
+    questions_path_from_config,
+    refresh_gold_chunks,
+    resummarize,
+    summary_path,
+    write_rows,
+)
 from src.metrics import Row, summarize
 
 LABEL_FIELDS = ("correct", "label_note")
@@ -51,8 +58,9 @@ def metric_lines(base: dict[str, Any], new: dict[str, Any]) -> list[tuple[str, f
         ("latency mean ms", base["latency_ms"]["mean"], new["latency_ms"]["mean"], "num"),
         ("input tokens", base["tokens"]["input"], new["tokens"]["input"], "num"),
     ]
-    for cat, c in base["per_category"].items():
-        lines.append((f"  {cat} behavior", c["behavior_acc"], new["per_category"].get(cat, {}).get("behavior_acc"), "pct"))
+    bc, nc = base["per_category"], new["per_category"]
+    for cat in [*bc, *(c for c in nc if c not in bc)]:  # a category may exist in only one run
+        lines.append((f"  {cat} behavior", bc.get(cat, {}).get("behavior_acc"), nc.get(cat, {}).get("behavior_acc"), "pct"))
     return lines
 
 
@@ -111,8 +119,10 @@ def write_markdown(path: Path, base_name: str, new_name: str, diffs: list[dict[s
 
 def compare(base_path: Path, new_path: Path, carry: bool) -> None:
     base_rows, new_rows = load_rows(base_path), load_rows(new_path)
-    refresh_gold_chunks(base_rows)  # in memory: score both runs against the current gold labels
-    refresh_gold_chunks(new_rows)
+    for path, rows in ((base_path, base_rows), (new_path, new_rows)):
+        # in memory: score both runs against the current gold labels of their own question file
+        config = json.loads(summary_path(path).read_text(encoding="utf-8"))["config"]
+        refresh_gold_chunks(rows, questions_path_from_config(config))
     diffs = question_diffs(base_rows, new_rows)
     if carry:
         n = carry_labels(diffs)
