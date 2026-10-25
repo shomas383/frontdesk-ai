@@ -1,6 +1,7 @@
 """Run the eval set, save per-question results and print metrics.
 
 Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid|rerank]
+                          [--doc-meta]
                           [--limit N] [--tenant ...] [--today 2026-10-24]
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
@@ -87,11 +88,12 @@ def run_eval(
     limit: int | None,
     questions_path: Path = DEFAULT_QUESTIONS,
     retrieval: str = "dense",
+    doc_meta: bool = False,
 ) -> tuple[Path, list[Row]]:
     questions = load_questions(questions_path, limit)
     provenance = git_provenance()  # before writing any output
     provider = get_provider()
-    p_hash = prompt_hash()
+    p_hash = prompt_hash(doc_meta)
     runs_dir = EVAL_DIR / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
     out_path = runs_dir / f"{datetime.now():%Y%m%d-%H%M%S}_{name}.jsonl"
@@ -100,7 +102,7 @@ def run_eval(
     with db.connect() as conn, out_path.open("w", encoding="utf-8") as out:
         warm_up(conn, tenant_id, retrieval)  # so model/index loading isn't counted in q01's latency
         for i, q in enumerate(questions, 1):
-            res = answer_question(conn, provider, tenant_id, q["question"], today, retrieval=retrieval)
+            res = answer_question(conn, provider, tenant_id, q["question"], today, retrieval=retrieval, doc_meta=doc_meta)
             row: Row = {
                 "id": q["id"],
                 "category": q["category"],
@@ -146,7 +148,8 @@ def run_eval(
         "today": today,
         "questions_file": questions_file_label(questions_path),
         "system_prompt_sha256": p_hash,
-        "doc_meta_sha256": meta_sha256(tenant_id),
+        "doc_meta": doc_meta,
+        **({"doc_meta_sha256": meta_sha256(tenant_id)} if doc_meta else {}),
         **provenance,
     }
     print_report(write_summary(out_path, config, rows))
@@ -255,6 +258,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS,
                         help="question set to run (default: eval/questions.jsonl)")
     parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
+    parser.add_argument("--doc-meta", action="store_true",
+                        help="show doc_type/dates from data/<tenant>/doc_meta.json to the LLM (off by default)")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)
@@ -271,7 +276,7 @@ def main() -> None:
     elif args.name:
         if not args.questions.is_file():
             parser.error(f"questions file not found: {args.questions}")
-        run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval)
+        run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval, args.doc_meta)
     else:
         parser.error("pass --name to run the eval, or --resummarize RUN_JSONL")
 

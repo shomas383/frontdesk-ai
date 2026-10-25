@@ -56,3 +56,18 @@ def test_real_doc_meta_covers_every_doc_and_section():
 
 def test_tenant_without_meta_file_gets_empty_meta():
     assert load_doc_meta("no-such-tenant") == {}
+
+
+def test_doc_meta_rule_only_in_prompt_when_enabled():
+    from src.prompts import SYSTEM_PROMPT, prompt_hash, system_prompt
+
+    assert "doc_type" not in SYSTEM_PROMPT and "{doc_meta_rule}" not in SYSTEM_PROMPT
+    assert "doc_type" in system_prompt(doc_meta=True)
+    assert prompt_hash() != prompt_hash(doc_meta=True)
+
+
+def test_doc_meta_flag_is_off_by_default():
+    from src.eval import build_parser
+
+    assert build_parser().parse_args(["--name", "x"]).doc_meta is False
+    assert build_parser().parse_args(["--name", "x", "--doc-meta"]).doc_meta is True

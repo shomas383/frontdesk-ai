@@ -175,3 +175,10 @@ def test_percentile_nearest_rank():
     assert percentile([10, 20, 30, 40], 95) == 40
     assert percentile([10, 20, 30, 40], 50) == 20
     assert percentile([], 95) is None
+
+
+def test_prompt_keeps_medical_questions_out_of_handoff():
+    from src.prompts import SYSTEM_PROMPT
+
+    assert '"handoff" にはしないでください' in SYSTEM_PROMPT
+    assert "効果についてスタッフが確認する・後ほど連絡する、とは案内しないでください" in SYSTEM_PROMPT

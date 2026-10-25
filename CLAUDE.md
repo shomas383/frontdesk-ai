@@ -27,7 +27,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 | `src/answer.py`, `src/prompts.py`, `src/llm.py` | retrieval + LLM call, the Japanese system prompt + JSON schema, providers |
 | `src/eval.py`, `src/metrics.py`, `src/compare.py` | eval runner, pure metric functions, run-vs-run diff |
 | `data/<tenant>/docs/` | clinic docs (source of truth for answers) |
-| `data/<tenant>/doc_meta.json`, `src/doc_meta.py` | per-doc/section `doc_type` (official, news, blog, campaign) + dates, rendered as `<chunk>` attributes for the LLM; not embedded. Keep it in sync when docs change (a test checks coverage) |
+| `data/<tenant>/doc_meta.json`, `src/doc_meta.py` | per-doc/section `doc_type` (official, news, blog, campaign) + dates, rendered as `<chunk>` attributes for the LLM; not embedded. **Off by default**; enable with `--doc-meta` on `src.eval`/`src.answer`. It didn't beat the stale-content prompt rule in M2. Keep it in sync when docs change (a test checks coverage) |
 | `eval/questions.jsonl` | the 50 original questions (q01–q50) |
 | `eval/questions_m2_heldout.jsonl` | the 20 held-out questions (q51–q70, `split: heldout_m2`) |
 | `eval/runs/` | committed run outputs: `<ts>_<name>.jsonl` + `.summary.json` (+ `.compare.md`) |
@@ -37,7 +37,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 ## Commands
 ```
 python -m src.ingest --tenant komorebi-seitai-demo
-python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid|rerank] [--limit 5]
+python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid|rerank] [--doc-meta] [--limit 5]
 python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]
 pytest
