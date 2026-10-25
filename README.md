@@ -2,7 +2,7 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestones 1 and 2 complete** (hand labels for the final M2 run pending). Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
+**Status: Milestones 1 and 2 complete.** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
 
 ## How it works
 
@@ -198,10 +198,11 @@ The original 50 questions and the 20 held-out questions are shown side by side, 
 | `m2-stale-v2` | + medical questions always `refuse_redirect`; no staff follow-up on treatment effects | 3 | 98.0% / 96.7% | 100% / 98.3% | = baseline | = baseline | 97.9% / 97.1% | 1.4 s |
 | `m2-guardrail` | + post-generation guardrail for unstated negatives | 3 | 98.7% / 98.3% | 100% / 98.3% | = baseline | = baseline | 97.9% / 97.1% | 1.4 s |
 | `m2-smalldocs` | + full price list in the context when any of its chunks is hit | 3 | 98.7% / 100% | 99.3% / 98.3% | = baseline | = baseline | **100% / 100%** | 1.4 s |
-| `m2-guardrail-v2` | guardrail checks the claim's subject against the cited doc; **adopted as the default** | 3 | labels pending | 100% / 96.7% | = baseline | = baseline | **100% / 100%** | 1.5 s |
+| `m2-guardrail-v2` | guardrail checks the claim's subject against the cited doc; **adopted as the default** | 3 | **100% / 100%** | 100% / 96.7% | = baseline | = baseline | **100% / 100%** | 1.5 s |
 
 - **Cost:** a full run costs about $0.017 (original set) and $0.007 (held-out).
 - **Run files:** in [eval/runs/](eval/runs/). Each 3-repeat row also has a `.repeats.json` aggregate.
+- **Final configuration:** 100% hand-label accuracy on both sets in all 3 repeats. The held-out behavior misses (q52, q65 in r2) are content-correct answers labeled `handoff`.
 
 ### Failures found and fixed
 

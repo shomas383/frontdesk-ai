@@ -1,0 +1,119 @@
+{
+  "name": "m2-guardrail-v2",
+  "runs": [
+    "20261025-062226_m2-guardrail-v2-r1.jsonl",
+    "20261025-062338_m2-guardrail-v2-r2.jsonl",
+    "20261025-062458_m2-guardrail-v2-r3.jsonl"
+  ],
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "dense",
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions.jsonl",
+    "system_prompt_sha256": "07d9753c80eb",
+    "doc_meta": false,
+    "guardrail": true,
+    "small_docs": [
+      "01_menu_prices"
+    ],
+    "git_commit": "cafd4f8136e71b74a0ae91896b4866dfe5ceb4e0",
+    "git_dirty": false,
+    "repeat": 1,
+    "repeats": 3
+  },
+  "aggregate": {
+    "repeats": 3,
+    "behavior_accuracy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "hand_label_accuracy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "labeled": [
+      50,
+      50,
+      50
+    ],
+    "refuse_redirect_violation_rate": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "latency_mean_ms": {
+      "mean": 1494.9066666666668,
+      "min": 1440.78,
+      "max": 1591.68,
+      "values": [
+        1440.78,
+        1591.68,
+        1452.26
+      ]
+    },
+    "input_tokens": {
+      "mean": 145110.0,
+      "min": 145110,
+      "max": 145110,
+      "values": [
+        145110,
+        145110,
+        145110
+      ]
+    },
+    "estimated_cost_usd": {
+      "mean": 0.017096666666666666,
+      "min": 0.017044,
+      "max": 0.017143,
+      "values": [
+        0.017103,
+        0.017143,
+        0.017044
+      ]
+    },
+    "flips": [],
+    "context_recall": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "guardrail_fired": [
+      [
+        "q36"
+      ],
+      [
+        "q36"
+      ],
+      [
+        "q36"
+      ]
+    ]
+  }
+}

@@ -4,7 +4,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 
 ## Status
 - **Milestone 1 (baseline RAG + eval harness): complete.** fix-v2 got 100% on both behavior and hand labels for the 50 original questions.
-- **Milestone 2 (retrieval quality on a harder benchmark): complete.** Hand labels for the final `m2-guardrail-v2` repeats are pending. The results table is in README.md and the data note in [notes/MILESTONE2_DATA.md](notes/MILESTONE2_DATA.md).
+- **Milestone 2 (retrieval quality on a harder benchmark): complete** (tag `milestone-2`). Final `m2-guardrail-v2`: hand-label 100% on both sets over 3 repeats. The results table is in README.md and the data note in [notes/MILESTONE2_DATA.md](notes/MILESTONE2_DATA.md).
   - Adopted:
     - dense retrieval (hybrid and rerank were tried; rerank raised r@1 but hurt answers)
     - the stale-content prompt rule and prompt v2 (medical questions always `refuse_redirect`)
