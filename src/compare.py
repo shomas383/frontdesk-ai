@@ -17,12 +17,12 @@ from typing import Any
 from src.eval import (
     load_rows,
     questions_path_from_config,
-    refresh_gold_chunks,
+    refresh_question_labels,
     resummarize,
     summary_path,
     write_rows,
 )
-from src.metrics import Row, summarize
+from src.metrics import Row, behavior_ok, summarize
 
 LABEL_FIELDS = ("correct", "label_note")
 
@@ -95,8 +95,8 @@ def carry_labels(diffs: list[dict[str, Any]]) -> int:
 
 
 def _mark(row: Row) -> str:
-    ok = row["behavior"] == row["expected_behavior"]
-    return f"{row['behavior']} ({'ok' if ok else 'expected ' + row['expected_behavior']})"
+    expected = "/".join(row.get("acceptable_behaviors") or [row["expected_behavior"]])
+    return f"{row['behavior']} ({'ok' if behavior_ok(row) else 'expected ' + expected})"
 
 
 def write_markdown(path: Path, base_name: str, new_name: str, diffs: list[dict[str, Any]]) -> None:
@@ -122,7 +122,7 @@ def compare(base_path: Path, new_path: Path, carry: bool) -> None:
     for path, rows in ((base_path, base_rows), (new_path, new_rows)):
         # in memory: score both runs against the current gold labels of their own question file
         config = json.loads(summary_path(path).read_text(encoding="utf-8"))["config"]
-        refresh_gold_chunks(rows, questions_path_from_config(config))
+        refresh_question_labels(rows, questions_path_from_config(config))
     diffs = question_diffs(base_rows, new_rows)
     if carry:
         n = carry_labels(diffs)

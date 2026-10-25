@@ -59,6 +59,9 @@ python -m src.eval --name heldout --questions eval/questions_m2_heldout.jsonl
 #    Retrieval mode (default dense): hybrid = dense + Japanese BM25 (SudachiPy) fused by RRF;
 #    rerank = hybrid top-20 reordered by BAAI/bge-reranker-v2-m3 (local, ~2.3 GB, ~8 s/question on CPU)
 python -m src.eval --name hybrid --retrieval hybrid
+#    Repeat N times (mean/min/max + flip table in <ts>_<name>.repeats.json); recompute after labeling:
+python -m src.eval --name v2 --repeats 3
+python -m src.eval --aggregate eval\runs\<ts>_v2.repeats.json
 
 # Unit tests (no DB, API or model needed)
 pytest
@@ -73,7 +76,7 @@ It prints:
 
 - **Doc-level recall@5 / hit@5**: over questions with non-empty `sources`, the mean fraction of expected docs found in the top-5 chunks, and whether at least one was found.
 - **Section-level recall@1/3/5, hit@5, MRR**: the same idea against `gold_chunks`, the exact `<doc_id>#<section>` chunks needed for a full answer. This is stricter, because the right doc can be retrieved without the right section, as in q35. The report also lists every question whose top 5 is missing a gold chunk.
-- **behavior accuracy**: predicted `behavior` vs `expected_behavior`, overall and per category.
+- **behavior accuracy**: predicted `behavior` vs `expected_behavior` (or any of the question's optional `acceptable_behaviors`), overall and per category.
 - **forbidden phrases**: a rule-based check for 治る/治ります/効く/改善します and similar. The headline number is the violation rate on `refuse_redirect` questions.
   - A match is skipped when its clause ends in a polite negation (〜ません/〜かねます), so refusals like 「治る時期や回数をお答えすることはできません」 aren't flagged.
   - The clause stops at 。/が、/ので, so 「治りますので、予約はできません」 is still flagged.

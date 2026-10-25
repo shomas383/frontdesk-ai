@@ -1,8 +1,8 @@
 """Run the eval set, save per-question results and print metrics.
 
 Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid|rerank]
-                          [--doc-meta]
-                          [--limit N] [--tenant ...] [--today 2026-10-24]
+                          [--doc-meta] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
+       python -m src.eval --resummarize RUN.jsonl | --aggregate RUNS.repeats.json
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
 
@@ -20,7 +20,7 @@ from src.answer import answer_question
 from src.config import DEFAULT_TENANT, EVAL_DIR, MAX_TOKENS, ROOT_DIR, TOP_K, get_settings
 from src.doc_meta import meta_sha256
 from src.llm import get_provider
-from src.metrics import Row, forbidden_phrases, summarize
+from src.metrics import Row, aggregate_repeats, behavior_ok, forbidden_phrases, summarize
 from src.prompts import prompt_hash
 from src.retrieval import RETRIEVAL_MODES, retrieval_config, warm_up
 
@@ -89,18 +89,63 @@ def run_eval(
     questions_path: Path = DEFAULT_QUESTIONS,
     retrieval: str = "dense",
     doc_meta: bool = False,
-) -> tuple[Path, list[Row]]:
+    repeats: int = 1,
+) -> list[Path]:
+    """Run the question set `repeats` times. With repeats > 1 each run is named <name>-r<i> and an
+    aggregate (<ts>_<name>.repeats.json) with mean/min/max and a flip table is written at the end."""
     questions = load_questions(questions_path, limit)
     provenance = git_provenance()  # before writing any output
     provider = get_provider()
     p_hash = prompt_hash(doc_meta)
     runs_dir = EVAL_DIR / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
-    out_path = runs_dir / f"{datetime.now():%Y%m%d-%H%M%S}_{name}.jsonl"
+    stamp = f"{datetime.now():%Y%m%d-%H%M%S}"
+    config = {
+        "tenant": tenant_id,
+        "provider": get_settings().llm_provider,
+        "model": provider.model_id,
+        "embed_model": get_settings().embed_model,
+        "top_k": TOP_K,
+        **retrieval_config(retrieval),
+        "max_tokens": MAX_TOKENS,
+        "today": today,
+        "questions_file": questions_file_label(questions_path),
+        "system_prompt_sha256": p_hash,
+        "doc_meta": doc_meta,
+        **({"doc_meta_sha256": meta_sha256(tenant_id)} if doc_meta else {}),
+        **provenance,
+    }
 
-    rows: list[Row] = []
-    with db.connect() as conn, out_path.open("w", encoding="utf-8") as out:
+    run_paths: list[Path] = []
+    with db.connect() as conn:
         warm_up(conn, tenant_id, retrieval)  # so model/index loading isn't counted in q01's latency
+        for rep in range(1, repeats + 1):
+            run_name = name if repeats == 1 else f"{name}-r{rep}"
+            out_path = runs_dir / f"{datetime.now():%Y%m%d-%H%M%S}_{run_name}.jsonl"
+            if repeats > 1:
+                print(f"\n--- repeat {rep}/{repeats} ---")
+            rows = _run_questions(conn, provider, tenant_id, today, questions, out_path, p_hash, retrieval, doc_meta)
+            run_config = {**config, **({"repeat": rep, "repeats": repeats} if repeats > 1 else {})}
+            print_report(write_summary(out_path, run_config, rows))
+            run_paths.append(out_path)
+    if repeats > 1:
+        print_aggregate(write_aggregate(runs_dir / f"{stamp}_{name}.repeats.json", name, run_paths))
+    return run_paths
+
+
+def _run_questions(
+    conn: Any,
+    provider: Any,
+    tenant_id: str,
+    today: str,
+    questions: list[dict[str, Any]],
+    out_path: Path,
+    p_hash: str,
+    retrieval: str,
+    doc_meta: bool,
+) -> list[Row]:
+    rows: list[Row] = []
+    with out_path.open("w", encoding="utf-8") as out:
         for i, q in enumerate(questions, 1):
             res = answer_question(conn, provider, tenant_id, q["question"], today, retrieval=retrieval, doc_meta=doc_meta)
             row: Row = {
@@ -109,6 +154,7 @@ def run_eval(
                 "split": q.get("split"),
                 "question": q["question"],
                 "expected_behavior": q["expected_behavior"],
+                "acceptable_behaviors": q.get("acceptable_behaviors"),
                 "expected_answer": q["expected_answer"],
                 "expected_sources": q["sources"],
                 "gold_chunks": q.get("gold_chunks", []),
@@ -134,26 +180,46 @@ def run_eval(
             }
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
             rows.append(row)
-            mark = "ok" if row["behavior"] == row["expected_behavior"] else "XX"
+            mark = "ok" if behavior_ok(row) else "XX"
             print(f"[{i:>2}/{len(questions)}] {q['id']} {mark} {row['behavior']:<15} {res.latency_ms:>5}ms")
+    return rows
 
-    config = {
-        "tenant": tenant_id,
-        "provider": get_settings().llm_provider,
-        "model": provider.model_id,
-        "embed_model": get_settings().embed_model,
-        "top_k": TOP_K,
-        **retrieval_config(retrieval),
-        "max_tokens": MAX_TOKENS,
-        "today": today,
-        "questions_file": questions_file_label(questions_path),
-        "system_prompt_sha256": p_hash,
-        "doc_meta": doc_meta,
-        **({"doc_meta_sha256": meta_sha256(tenant_id)} if doc_meta else {}),
-        **provenance,
-    }
-    print_report(write_summary(out_path, config, rows))
-    return out_path, rows
+
+def write_aggregate(agg_path: Path, name: str, run_paths: list[Path]) -> dict[str, Any]:
+    summaries = [json.loads(summary_path(p).read_text(encoding="utf-8")) for p in run_paths]
+    aggregate = aggregate_repeats([s["metrics"] for s in summaries], [load_rows(p) for p in run_paths])
+    data = {"name": name, "runs": [p.name for p in run_paths], "config": summaries[0]["config"], "aggregate": aggregate}
+    agg_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return data
+
+
+def reaggregate(agg_path: Path) -> dict[str, Any]:
+    """Resummarize each member run (picking up hand labels) and recompute the aggregate; no API calls."""
+    data = json.loads(agg_path.read_text(encoding="utf-8"))
+    run_paths = [agg_path.parent / n for n in data["runs"]]
+    for p in run_paths:
+        resummarize(p)
+    return write_aggregate(agg_path, data["name"], run_paths)
+
+
+def print_aggregate(data: dict[str, Any]) -> None:
+    a = data["aggregate"]
+    print(f"\n=== {data['name']}: {a['repeats']} repeats ({data['config'].get('questions_file')}) ===")
+    for label, key in (("behavior accuracy", "behavior_accuracy"), ("hand-label accuracy", "hand_label_accuracy"),
+                       ("forbidden on refuse_redirect", "refuse_redirect_violation_rate")):
+        s = a[key]
+        values = " ".join(_pct(v).strip() for v in s["values"])
+        print(f"{label:<30} mean {_pct(s['mean'])}  min {_pct(s['min'])}  max {_pct(s['max'])}  [{values}]")
+    lat, cost = a["latency_mean_ms"], a["estimated_cost_usd"]
+    print(f"{'latency mean ms':<30} mean {lat['mean']:.0f}  min {lat['min']:.0f}  max {lat['max']:.0f}")
+    if cost["mean"] is not None:
+        print(f"{'est. cost per run':<30} mean ${cost['mean']:.4f}")
+    print(f"labeled per run: {a['labeled']}")
+    print(f"\nflips / misses ({len(a['flips'])}):")
+    for f in a["flips"]:
+        marks = " ".join(f"{b}{'' if ok else '(X)'}{'' if c is not False else '[wrong]'}"
+                         for b, ok, c in zip(f["behaviors"], f["behavior_ok"], f["correct"]))
+        print(f"  {f['id']} expected {'/'.join(f['expected'])}: {marks}")
 
 
 def summary_path(run_path: Path) -> Path:
@@ -171,15 +237,16 @@ def write_rows(run_path: Path, rows: list[Row]) -> None:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
-def refresh_gold_chunks(rows: list[Row], questions_path: Path) -> list[str]:
-    """Set each row's gold_chunks from the run's question file (the source of truth for labels).
-    Returns the ids whose gold_chunks changed."""
-    gold = {q["id"]: q.get("gold_chunks", []) for q in load_questions(questions_path, None)}
+def refresh_question_labels(rows: list[Row], questions_path: Path) -> list[str]:
+    """Set each row's gold_chunks and acceptable_behaviors from the run's question file (the source of
+    truth for labels). Returns the ids that changed."""
+    questions = {q["id"]: q for q in load_questions(questions_path, None)}
     changed = []
     for row in rows:
-        new = gold.get(row["id"], [])
-        if row.get("gold_chunks") != new:
-            row["gold_chunks"] = new
+        q = questions.get(row["id"], {})
+        new = {"gold_chunks": q.get("gold_chunks", []), "acceptable_behaviors": q.get("acceptable_behaviors")}
+        if any(row.get(k) != v for k, v in new.items()):
+            row.update(new)
             changed.append(row["id"])
     return changed
 
@@ -195,14 +262,15 @@ def write_summary(run_path: Path, config: dict[str, Any], rows: list[Row]) -> di
 
 def resummarize(run_path: Path) -> dict[str, Any]:
     """Recompute metrics from a (possibly hand-labeled) run file, keeping the original config.
-    gold_chunks are refreshed from the run's question file so label fixes apply to past runs."""
+    gold_chunks/acceptable_behaviors are refreshed from the run's question file so label fixes apply
+    to past runs."""
     config = json.loads(summary_path(run_path).read_text(encoding="utf-8"))["config"]
     rows = load_rows(run_path)
     questions_path = questions_path_from_config(config)
-    changed = refresh_gold_chunks(rows, questions_path)
+    changed = refresh_question_labels(rows, questions_path)
     if changed:
         write_rows(run_path, rows)
-        print(f"Updated gold_chunks from {questions_path.name} for: {changed}")
+        print(f"Updated question labels from {questions_path.name} for: {changed}")
     return write_summary(run_path, config, rows)
 
 
@@ -263,8 +331,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--repeats", type=int, default=1,
+                        help="run the set N times; writes <ts>_<name>.repeats.json with mean/min/max and flips")
     parser.add_argument("--resummarize", type=Path, metavar="RUN_JSONL",
                         help="recompute the summary of an existing (hand-labeled) run; no API calls")
+    parser.add_argument("--aggregate", type=Path, metavar="REPEATS_JSON",
+                        help="resummarize the runs of a .repeats.json and recompute it; no API calls")
     return parser
 
 
@@ -273,12 +345,17 @@ def main() -> None:
     args = parser.parse_args()
     if args.resummarize:
         print_report(resummarize(args.resummarize))
+    elif args.aggregate:
+        print_aggregate(reaggregate(args.aggregate))
     elif args.name:
         if not args.questions.is_file():
             parser.error(f"questions file not found: {args.questions}")
-        run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval, args.doc_meta)
+        if args.repeats < 1:
+            parser.error("--repeats must be >= 1")
+        run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval, args.doc_meta,
+                 args.repeats)
     else:
-        parser.error("pass --name to run the eval, or --resummarize RUN_JSONL")
+        parser.error("pass --name to run the eval, --resummarize RUN_JSONL or --aggregate REPEATS_JSON")
 
 
 if __name__ == "__main__":

@@ -93,8 +93,13 @@ def section_metrics(rows: list[Row], k: int = 5) -> dict[str, Any]:
     }
 
 
+def behavior_ok(row: Row) -> bool:
+    """Predicted behavior is the expected one, or one of the question's acceptable_behaviors."""
+    return row["behavior"] in (row.get("acceptable_behaviors") or [row["expected_behavior"]])
+
+
 def behavior_accuracy(rows: list[Row]) -> float | None:
-    return _mean([float(r["behavior"] == r["expected_behavior"]) for r in rows])
+    return _mean([float(behavior_ok(r)) for r in rows])
 
 
 def hand_label_accuracy(rows: list[Row]) -> dict[str, Any]:
@@ -180,3 +185,47 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
     if any(r.get("split") for r in rows):
         summary["per_split"] = per_group(rows, "split")
     return summary
+
+
+def _stats(values: list[float | None]) -> dict[str, Any]:
+    """mean/min/max over the non-None values, plus the per-repeat values (None if never measured)."""
+    present = [v for v in values if v is not None]
+    if not present:
+        return {"mean": None, "min": None, "max": None, "values": values}
+    return {"mean": sum(present) / len(present), "min": min(present), "max": max(present), "values": values}
+
+
+def flip_table(runs_rows: list[list[Row]]) -> list[dict[str, Any]]:
+    """Questions whose behavior differs across repeats, or that are ever wrong (behavior or hand label)."""
+    by_id = [{r["id"]: r for r in rows} for rows in runs_rows]
+    flips = []
+    for qid, first in by_id[0].items():
+        rs = [run[qid] for run in by_id if qid in run]
+        behaviors = [r["behavior"] for r in rs]
+        ok = [behavior_ok(r) for r in rs]
+        correct = [r.get("correct") for r in rs]
+        if len(set(behaviors)) > 1 or not all(ok) or False in correct:
+            flips.append({
+                "id": qid,
+                "expected": first.get("acceptable_behaviors") or [first["expected_behavior"]],
+                "behaviors": behaviors,
+                "behavior_ok": ok,
+                "correct": correct,
+            })
+    return flips
+
+
+def aggregate_repeats(metrics: list[dict[str, Any]], runs_rows: list[list[Row]]) -> dict[str, Any]:
+    """Mean/min/max of headline metrics over repeated runs of the same question set, plus a flip table."""
+    return {
+        "repeats": len(metrics),
+        "behavior_accuracy": _stats([m["behavior_accuracy"] for m in metrics]),
+        "hand_label_accuracy": _stats([m["hand_label"]["accuracy"] for m in metrics]),
+        "labeled": [m["hand_label"]["labeled_n"] for m in metrics],
+        "refuse_redirect_violation_rate": _stats(
+            [m["forbidden_phrases"]["refuse_redirect_violation_rate"] for m in metrics]),
+        "latency_mean_ms": _stats([m["latency_ms"]["mean"] for m in metrics]),
+        "input_tokens": _stats([m["tokens"]["input"] for m in metrics]),
+        "estimated_cost_usd": _stats([m.get("estimated_cost_usd") for m in metrics]),
+        "flips": flip_table(runs_rows),
+    }

@@ -37,16 +37,17 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 ## Commands
 ```
 python -m src.ingest --tenant komorebi-seitai-demo
-python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid|rerank] [--doc-meta] [--limit 5]
+python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid|rerank] [--doc-meta] [--repeats 3] [--limit 5]
 python -m src.eval --resummarize eval/runs/<run>.jsonl
+python -m src.eval --aggregate eval/runs/<ts>_<name>.repeats.json   # after labeling repeats
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]
 pytest
 ```
 
 ## Eval workflow
-1. **Run** `src.eval --name ...` on one question file per run. The summary records `questions_file`, git commit/dirty and the prompt hash, and it reports per category and, when present, per `split`.
+1. **Run** `src.eval --name ...` on one question file per run; use `--repeats 3` for anything you want to cite, because held-out behavior varies by up to 15 points between identical runs. Repeats write `<name>-r1..rN` runs plus a `.repeats.json` with mean/min/max and a flip table. The summary records `questions_file`, git commit/dirty and the prompt hash, and it reports per category and, when present, per `split`.
 2. **Hand-label** by setting `correct` (and optionally `label_note`) in the run `.jsonl`, comparing against `expected_answer` and `trap`.
-3. **Resummarize** with `--resummarize`, which recomputes metrics with no API calls. It refreshes `gold_chunks` from the run's own question file.
+3. **Resummarize** with `--resummarize`, which recomputes metrics with no API calls. It refreshes `gold_chunks` and `acceptable_behaviors` from the run's own question file.
 4. **Compare** with `src.compare`, which gives metric deltas, behavior flips and side-by-side changed answers. `--carry-labels` copies labels onto byte-identical answers.
 
 ## Rules

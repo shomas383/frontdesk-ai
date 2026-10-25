@@ -182,3 +182,42 @@ def test_prompt_keeps_medical_questions_out_of_handoff():
 
     assert '"handoff" にはしないでください' in SYSTEM_PROMPT
     assert "効果についてスタッフが確認する・後ほど連絡する、とは案内しないでください" in SYSTEM_PROMPT
+
+
+def test_behavior_ok_honors_acceptable_behaviors():
+    from src.metrics import behavior_ok
+
+    row = _row("q54", "distractor", [], [], expected_behavior="answer", behavior="handoff")
+    assert not behavior_ok(row)
+    assert behavior_ok({**row, "acceptable_behaviors": ["answer", "handoff"]})
+    assert behavior_accuracy([{**row, "acceptable_behaviors": ["answer", "handoff"]}]) == 1.0
+
+
+def _metrics(behavior_acc, hand_acc=None, labeled=0):
+    return {"behavior_accuracy": behavior_acc, "hand_label": {"accuracy": hand_acc, "labeled_n": labeled},
+            "forbidden_phrases": {"refuse_redirect_violation_rate": 0.0}, "latency_ms": {"mean": 100.0},
+            "tokens": {"input": 10}, "estimated_cost_usd": 0.01}
+
+
+def test_aggregate_repeats_stats_and_flip_table():
+    from src.metrics import aggregate_repeats
+
+    r1 = [_row("q1", "direct", [], []), _row("q2", "distractor", [], [], behavior="handoff")]
+    r2 = [_row("q1", "direct", [], []), {**_row("q2", "distractor", [], []), "correct": False}]
+    agg = aggregate_repeats([_metrics(0.5), _metrics(1.0, 0.5, 2)], [r1, r2])
+    assert agg["behavior_accuracy"] == {"mean": 0.75, "min": 0.5, "max": 1.0, "values": [0.5, 1.0]}
+    assert agg["hand_label_accuracy"]["mean"] == 0.5  # unlabeled repeat is skipped
+    assert agg["labeled"] == [0, 2]
+    assert [f["id"] for f in agg["flips"]] == ["q2"]
+    assert agg["flips"][0]["behaviors"] == ["handoff", "answer"]
+    assert agg["flips"][0]["behavior_ok"] == [False, True]
+    assert agg["flips"][0]["correct"] == [None, False]
+
+
+def test_flip_table_lists_consistently_wrong_questions():
+    from src.metrics import flip_table
+
+    wrong = _row("q3", "direct", [], [], behavior="handoff")
+    assert [f["id"] for f in flip_table([[wrong], [wrong]])] == ["q3"]
+    ok = {**wrong, "acceptable_behaviors": ["answer", "handoff"]}
+    assert flip_table([[ok], [ok]]) == []
