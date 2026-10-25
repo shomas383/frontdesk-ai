@@ -15,5 +15,33 @@ services:
       timeout: 3s
       retries: 10
 
+  # The API. Behind a profile so `docker compose up -d` still starts only the dev database:
+  #   docker compose --profile app up --build
+  app:
+    profiles: ["app"]
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/frontdesk
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Ingest the allowed tenants' docs on first start (skipped once their chunks exist), then serve.
+    command:
+      - sh
+      - -c
+      - >-
+        python -m src.ingest --if-empty --tenant $$(echo "$${ALLOWED_TENANTS:-komorebi-seitai-demo}" | tr ',' ' ')
+        && exec uvicorn src.app:app --host 0.0.0.0 --port 8000 --workers 1 --no-access-log
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   pgdata:

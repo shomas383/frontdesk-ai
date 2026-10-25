@@ -2,7 +2,7 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestones 1 and 2 complete.** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
+**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — local API done.** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
 
 ## How it works
 
@@ -30,6 +30,7 @@ question ──bge-m3──▶ top-5 cosine (+ full doc for short docs) ──�
 | [src/doc_meta.py](src/doc_meta.py) | Loads `data/<tenant>/doc_meta.json` (doc_type `official`/`news`/`blog`/`campaign`, published/effective/valid_until dates) and shows it in each chunk's context header when `--doc-meta` is passed (off by default). It is not embedded, so retrieval is unaffected |
 | [src/llm.py](src/llm.py) | Provider interface (`LLM_PROVIDER=anthropic` or `bedrock`) |
 | [src/eval.py](src/eval.py), [src/metrics.py](src/metrics.py) | Eval runner and pure metric functions |
+| [src/app.py](src/app.py), [src/limits.py](src/limits.py), [src/usage.py](src/usage.py), [src/redact.py](src/redact.py) | HTTP API (see [API](#api-local)); per-IP rate limiter; daily cap/token budget in Postgres; phone/email redaction for logs |
 
 ## Setup (Windows / PowerShell)
 
@@ -41,7 +42,7 @@ conda activate frontdesk-ai
 pip install -r requirements.txt
 
 copy .env.example .env      # then set ANTHROPIC_API_KEY in .env
-docker compose up -d        # Postgres 17 + pgvector on localhost:5433
+docker compose up -d        # Postgres 17 + pgvector on localhost:5433 (the API service is opt-in, see below)
 ```
 
 The first ingest downloads `BAAI/bge-m3` (about 2.3 GB) into the Hugging Face cache. It runs on CPU.
@@ -123,8 +124,72 @@ python -m src.compare eval\runs\<base>.jsonl eval\runs\<new>.jsonl [--carry-labe
 | `AWS_REGION` / `BEDROCK_MODEL_ID` | `us-east-2` / none | for `bedrock`; use a `us.` inference-profile ID and standard AWS credentials |
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5433/frontdesk` | matches `docker-compose.yml` (host port 5433) |
 | `EMBED_MODEL` | `BAAI/bge-m3` | normalized, 1024 dims |
+| `ALLOWED_TENANTS` | `komorebi-seitai-demo` | API: comma-separated tenants `/chat` accepts |
+| `MAX_MESSAGE_CHARS` | `300` | API: longer messages get 422 |
+| `RATE_LIMIT_PER_MINUTE` / `RATE_LIMIT_PER_DAY` | `10` / `50` | API: per client IP, in memory |
+| `DAILY_QUESTION_CAP` / `DAILY_TOKEN_BUDGET` | `500` / `2000000` | API: global per JST day, in Postgres; then a polite handoff |
+| `APP_TODAY` | today in Asia/Tokyo | API: pin the docs' reference date (e.g. `2026-10-24`, as in eval) |
+| `TRUST_PROXY_HEADERS` | `false` | API: rate-limit by `X-Forwarded-For` (only behind a trusted proxy) |
+| `CORS_ORIGINS` | none | API: comma-separated browser origins |
+| `APP_PORT` | `8000` | host port for `docker compose --profile app up` |
 
 Cost: the model runs with thinking disabled, `effort: low` and `max_tokens: 500`. A full 50-question run on Haiku 5.5 costs well under $0.10.
+
+## API (local)
+
+`src/app.py` serves the same answer path as the eval: dense top-5, small-docs expansion, prompt v2 and the guardrail, with the same defaults as `python -m src.eval`.
+
+```powershell
+# Dev: against the database on localhost:5433 (APP_TODAY pins the date the docs are judged against)
+$env:APP_TODAY = "2026-10-24"
+uvicorn src.app:app --port 8000 --workers 1 --no-access-log
+
+# Docker: Postgres + API; ingests ALLOWED_TENANTS on first start (skipped once chunks exist)
+docker compose --profile app up --build
+```
+
+```bash
+curl -s localhost:8000/health
+curl -s localhost:8000/chat -H "Content-Type: application/json" \
+  -d '{"tenant": "komorebi-seitai-demo", "message": "60分の全身整体はいくらですか？"}'
+# {"answer": "全身整体60分の料金は7,150円（税込）です。…", "behavior": "answer", "sources": ["01_menu_prices", "07_news"]}
+```
+
+| Endpoint | Response |
+|---|---|
+| `POST /chat` `{tenant, message}` | `200 {answer, behavior, sources}`. If the pipeline fails, a staff-handoff answer |
+| | `404` unknown tenant · `422` empty message or over `MAX_MESSAGE_CHARS` · `429` per-IP limit (with `Retry-After`) |
+| | Daily question cap or token budget used up: `200` with 「…お電話またはLINEにて当院へ直接お問い合わせください。」, `behavior: handoff`; the LLM is not called |
+| `GET /health` | `200 {status, db, model}`, or `503` if the database is unreachable |
+
+**Protection:**
+- Per-IP limits (`RATE_LIMIT_PER_MINUTE`/`_PER_DAY`) live in process memory, keyed by a salted hash of the IP.
+- The global per-day limits (`DAILY_QUESTION_CAP`, `DAILY_TOKEN_BUDGET`, by JST date) are in the Postgres table `usage_daily`. Restarts don't reset them.
+- The token budget can be overshot by the requests already in flight, about 3k tokens each.
+
+**Single worker only.** Run uvicorn with `--workers 1`, as the Dockerfile does. With N workers each process would keep its own rate-limit counts, and a client would get N× the limit. Move the limiter to a shared store before scaling out.
+
+**Footprint** (measured 2026-10-25 with `docker stats`):
+- **App:** about 0.8 GB resident while serving, with bge-m3 loaded and ~1.6 s per question. The peak is about 1.1 GB, while embedding all chunks during the first-start ingest.
+- **Postgres:** about 75 MB.
+- **Image:** 3.3 GB, with CPU-only torch and bge-m3 baked in.
+- **Sizing:** a 2 GB instance is enough for the demo.
+
+### Logs and retention
+
+Each request is logged as one JSON line on stdout:
+- `question`, `tenant`, `outcome` (`answered`/`rate_limited`/`cap`/`budget`/`error`/`invalid`)
+- `behavior`, `sources`, `guardrail_fired`, `guardrail_removed`
+- `latency_ms`, `llm_latency_ms`, `input_tokens`, `output_tokens`, `cost_usd`, `error`
+
+**Privacy:**
+- **Not logged:** IP addresses, user agents and session IDs. Uvicorn's access log is disabled because it prints client IPs.
+- Phone numbers and email addresses in the question are replaced with `[電話番号]` / `[メール]` before logging (`src/redact.py`). The LLM still sees the original message.
+- Rejected requests (rate-limited, invalid) don't log the question text.
+
+**Retention:**
+- **Locally:** logs exist only in the container's Docker log (`docker compose logs app`) and are deleted with the container.
+- **On AWS (M4 deploy step):** logs go to a CloudWatch log group with a fixed retention of 30 days. Usage counters in `usage_daily` hold only per-day totals.
 
 ## Milestone 1 — Baseline RAG pipeline and evaluation harness
 

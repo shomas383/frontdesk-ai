@@ -20,6 +20,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - doc metadata in the context (`--doc-meta`)
 - **Milestone 3 (automatic LLM answer grader, calibrated against the hand labels): planned, deferred** so the public demo can come first. The milestone number is intentionally skipped for now.
 - **Milestone 4 (public demo): in progress.** Web chat, LINE integration, AWS deployment (Bedrock) and a demo video.
+  - Step 1 done: local API (`src/app.py`) + Dockerfile + compose `app` profile. See README "API (local)".
 
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.
@@ -50,6 +51,10 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 | `src/guardrails.py` | post-generation unstated-negative check (on by default; `--no-guardrail` turns it off); details below |
 | `src/answer.py`, `src/prompts.py`, `src/llm.py` | retrieval + LLM call, the Japanese system prompt + JSON schema, providers |
 | `src/eval.py`, `src/metrics.py`, `src/compare.py` | eval runner (`--repeats`, `--aggregate`), pure metric functions, run-vs-run diff |
+| `src/pricing.py` | token prices + `estimate_cost_usd` (eval and API) |
+| `src/app.py` | FastAPI `POST /chat`, `GET /health`; calls `answer_question` with no feature kwargs so it always matches eval defaults (a test enforces this). JSON-line request logs on stdout, no IPs |
+| `src/limits.py`, `src/usage.py`, `src/redact.py` | per-IP rate limiter (in memory → **uvicorn must run with 1 worker**); daily question cap + token budget in Postgres `usage_daily` (JST day); phone/email redaction before logging |
+| `Dockerfile`, `docker-compose.yml` | CPU torch + bge-m3 baked in. `docker compose up -d` starts only the dev db; `--profile app` adds the API, which runs `ingest --if-empty` on start |
 | `data/<tenant>/docs/` | clinic docs (source of truth for answers) |
 | `data/<tenant>/doc_meta.json`, `src/doc_meta.py` | per-doc/section `doc_type` (official, news, blog, campaign) + published/effective/valid_until dates. Always used by the guardrail on the server side. Shown to the LLM only with `--doc-meta` (off by default). Keep it in sync when docs change; a test checks coverage |
 | `eval/questions.jsonl` | the 50 original questions (q01–q50) |
@@ -67,7 +72,9 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 
 ## Commands
 ```
-python -m src.ingest --tenant komorebi-seitai-demo
+python -m src.ingest --tenant komorebi-seitai-demo [--if-empty]
+uvicorn src.app:app --port 8000 --workers 1 --no-access-log        # API; APP_TODAY=2026-10-24 to pin the date
+docker compose --profile app up --build                            # db + API in Docker
 python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--repeats 3] [--retrieval dense|hybrid|rerank] [--doc-meta] [--no-guardrail] [--no-small-docs] [--limit 5]
 python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.eval --aggregate eval/runs/<ts>_<name>.repeats.json   # after labeling repeats; no API calls
