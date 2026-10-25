@@ -131,6 +131,25 @@ def load_rows(run_path: Path) -> list[Row]:
         return [json.loads(line) for line in f if line.strip()]
 
 
+def write_rows(run_path: Path, rows: list[Row]) -> None:
+    with run_path.open("w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def refresh_gold_chunks(rows: list[Row]) -> list[str]:
+    """Set each row's gold_chunks from the current question set (the source of truth for labels).
+    Returns the ids whose gold_chunks changed."""
+    gold = {q["id"]: q.get("gold_chunks", []) for q in load_questions(EVAL_DIR / "questions.jsonl", None)}
+    changed = []
+    for row in rows:
+        new = gold.get(row["id"], [])
+        if row.get("gold_chunks") != new:
+            row["gold_chunks"] = new
+            changed.append(row["id"])
+    return changed
+
+
 def write_summary(run_path: Path, config: dict[str, Any], rows: list[Row]) -> dict[str, Any]:
     metrics = summarize(rows)
     tokens = metrics["tokens"]
@@ -141,9 +160,15 @@ def write_summary(run_path: Path, config: dict[str, Any], rows: list[Row]) -> di
 
 
 def resummarize(run_path: Path) -> dict[str, Any]:
-    """Recompute metrics from a (possibly hand-labeled) run file, keeping the original config."""
+    """Recompute metrics from a (possibly hand-labeled) run file, keeping the original config.
+    gold_chunks are refreshed from eval/questions.jsonl so label fixes apply to past runs."""
     config = json.loads(summary_path(run_path).read_text(encoding="utf-8"))["config"]
-    return write_summary(run_path, config, load_rows(run_path))
+    rows = load_rows(run_path)
+    changed = refresh_gold_chunks(rows)
+    if changed:
+        write_rows(run_path, rows)
+        print(f"Updated gold_chunks from questions.jsonl for: {changed}")
+    return write_summary(run_path, config, rows)
 
 
 def _pct(value: float | None) -> str:

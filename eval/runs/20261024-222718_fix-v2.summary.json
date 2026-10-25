@@ -20,21 +20,18 @@
       "hit": 1.0
     },
     "section_retrieval": {
-      "n": 40,
-      "recall@1": 0.6375,
-      "recall@3": 0.9333333333333333,
-      "recall@5": 0.9541666666666666,
-      "hit@5": 0.975,
-      "mrr": 0.8375,
+      "n": 39,
+      "recall@1": 0.6538461538461539,
+      "recall@3": 0.9572649572649573,
+      "recall@5": 0.9786324786324786,
+      "hit@5": 1.0,
+      "mrr": 0.8589743589743589,
       "missed_gold": {
         "q27": [
           "01_menu_prices#初回限定（LINE友だち登録の方）"
         ],
         "q35": [
           "01_menu_prices#初検料"
-        ],
-        "q41": [
-          "03_access#所在地"
         ]
       }
     },
@@ -111,12 +108,12 @@
         "labeled_n": 8,
         "hand_acc": 1.0,
         "section": {
-          "n": 1,
-          "recall@1": 0.0,
-          "recall@3": 0.0,
-          "recall@5": 0.0,
-          "hit@5": 0.0,
-          "mrr": 0.0
+          "n": 0,
+          "recall@1": null,
+          "recall@3": null,
+          "recall@5": null,
+          "hit@5": null,
+          "mrr": null
         }
       },
       "symptom_refuse": {

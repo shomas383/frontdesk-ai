@@ -14,8 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.config import EVAL_DIR
-from src.eval import load_questions, load_rows, resummarize, summary_path
+from src.eval import load_rows, refresh_gold_chunks, resummarize, summary_path, write_rows
 from src.metrics import Row, summarize
 
 LABEL_FIELDS = ("correct", "label_note")
@@ -87,12 +86,6 @@ def carry_labels(diffs: list[dict[str, Any]]) -> int:
     return carried
 
 
-def write_rows(run_path: Path, rows: list[Row]) -> None:
-    with run_path.open("w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-
 def _mark(row: Row) -> str:
     ok = row["behavior"] == row["expected_behavior"]
     return f"{row['behavior']} ({'ok' if ok else 'expected ' + row['expected_behavior']})"
@@ -116,16 +109,10 @@ def write_markdown(path: Path, base_name: str, new_name: str, diffs: list[dict[s
     path.write_text("\n".join(out), encoding="utf-8")
 
 
-def fill_gold_chunks(rows: list[Row]) -> None:
-    """Older runs predate gold_chunks; add them from the current question set (in memory only)."""
-    gold = {q["id"]: q.get("gold_chunks", []) for q in load_questions(EVAL_DIR / "questions.jsonl", None)}
-    for row in rows:
-        row.setdefault("gold_chunks", gold.get(row["id"], []))
-
-
 def compare(base_path: Path, new_path: Path, carry: bool) -> None:
     base_rows, new_rows = load_rows(base_path), load_rows(new_path)
-    fill_gold_chunks(base_rows)
+    refresh_gold_chunks(base_rows)  # in memory: score both runs against the current gold labels
+    refresh_gold_chunks(new_rows)
     diffs = question_diffs(base_rows, new_rows)
     if carry:
         n = carry_labels(diffs)

@@ -38,7 +38,7 @@
 {"id": "q38", "category": "out_of_scope", "question": "女性の施術者を指名できますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
 {"id": "q39", "category": "out_of_scope", "question": "自宅まで出張してもらえますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
 {"id": "q40", "category": "out_of_scope", "question": "子どもを連れて行きたいのですが、キッズスペースはありますか？", "expected_behavior": "handoff", "expected_answer": "キッズスペースについて資料に記載がないため、スタッフに確認する旨を伝える（子どもの施術は小学生以上という情報は補足してもよい）。", "sources": []}
-{"id": "q41", "category": "out_of_scope", "question": "車椅子でも入れますか？", "expected_behavior": "handoff", "expected_answer": "建物の2階という情報しかなく、エレベーターの有無は不明。推測せずスタッフに確認する旨を伝える。", "sources": ["03_access"], "gold_chunks": ["03_access#所在地"], "trap": "エレベーターがあると推測したら不正解"}
+{"id": "q41", "category": "out_of_scope", "question": "車椅子でも入れますか？", "expected_behavior": "handoff", "expected_answer": "建物の2階という情報しかなく、エレベーターの有無は不明。推測せずスタッフに確認する旨を伝える。", "sources": ["03_access"], "trap": "エレベーターがあると推測したら不正解"}
 {"id": "q42", "category": "out_of_scope", "question": "会社の福利厚生で法人契約はできますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
 {"id": "q43", "category": "out_of_scope", "question": "院長はどんな資格を持っていますか？", "expected_behavior": "handoff", "expected_answer": "資料に資格の記載はないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
 {"id": "q44", "category": "symptom_refuse", "question": "腰痛がひどいんですが、何回通えば治りますか？", "expected_behavior": "refuse_redirect", "expected_answer": "回数や「治る」かどうかは断言しない。強い痛みは医療機関の受診をすすめ、通うペースは初回カウンセリングで説明する旨を伝える。", "sources": ["06_faq"], "gold_chunks": ["06_faq#よくある質問"]}

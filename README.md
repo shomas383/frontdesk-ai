@@ -113,6 +113,56 @@ python -m src.compare eval\runs\<base>.jsonl eval\runs\<new>.jsonl [--carry-labe
 
 Cost: the model runs with thinking disabled, `effort: low` and `max_tokens: 500`. A full 50-question run on Haiku 5.5 costs well under $0.10.
 
+## Milestone 1 — Baseline RAG pipeline and evaluation harness
+
+**Goal:** build the simplest end-to-end system plus a reliable way to measure it, so every later change is a measured before/after instead of a guess.
+
+### What was built
+
+- **Pipeline:** Markdown docs → `##`-section chunks (with the doc preamble merged into each chunk) → `BAAI/bge-m3` embeddings → Postgres + pgvector → top-5 dense retrieval → Claude Haiku 5.5 → structured JSON `{answer, behavior, sources}`.
+- **Behaviors:** answer only from the clinic's documents with citations; **hand off** to staff when the answer isn't in the documents; **refuse and redirect** symptom/medical questions (no diagnosis, no promised results).
+- **Provider interface:** Anthropic API now, Amazon Bedrock behind the same interface (`LLM_PROVIDER`).
+- **Eval harness** (`src/eval.py`, `src/metrics.py`, `src/compare.py`):
+  - 50 questions across 5 categories: direct, paraphrase, multi_doc, out_of_scope, symptom_refuse
+  - doc-level and section-level retrieval metrics (recall@1/3/5, hit@5, MRR)
+  - behavior accuracy, hand-label accuracy, a negation-aware forbidden-phrase check
+  - latency, tokens and cost
+  - each run records its git commit, dirty flag and system-prompt hash; `compare` shows metric deltas and changed answers side by side
+- **23 tests**; a full 50-question run costs about **$0.015**.
+
+### Results
+
+| Run | Change | Behavior acc. | Hand-label acc. |
+|---|---|---|---|
+| [`20261024-184900_baseline`](eval/runs/20261024-184900_baseline.jsonl) | — | 98% | **92%** |
+| [`20261024-215215_fix-v1`](eval/runs/20261024-215215_fix-v1.jsonl) | Rule against inferring "not offered" from missing info; doc preamble merged into every chunk | 100% | **96%** |
+| [`20261024-222718_fix-v2`](eval/runs/20261024-222718_fix-v2.jsonl) | Japanese-only replies; language-support questions hand off | 100% | **100%** |
+
+Retrieval (unchanged across runs): doc recall@5 100%, **section recall@1 65.4%**, recall@3 95.7%, recall@5 97.9%, MRR 0.859.
+
+### Failures found and fixed
+
+| Question | Failure | Root cause | Fix |
+|---|---|---|---|
+| q39 (home visits), q37 (English support) | Stated "we don't offer that" though the docs never say so | Model inferred a negative fact from missing information | Prompt rule: never assert something isn't offered unless the docs say so; hand off instead |
+| q27 (cheapest course) | Claimed tax inclusion wasn't stated | The "all prices include tax" note sat in a separate preamble chunk that wasn't retrieved | Merge each doc's preamble into every chunk of that doc |
+| q37 (English support) | Replied in English, saying it couldn't reply in English | No fixed reply language | Always reply in Japanese (です/ます); language-support questions hand off |
+| q35 (first-visit total) | Incomplete total | Gold section `01_menu_prices#初検料` not retrieved | Answer now correct via the price-revision table; retrieval miss kept as a Milestone 2 target |
+
+### What I learned
+
+- **Automatic metrics can hide real errors.** Behavior accuracy was 98% at baseline, but hand-labeling the answers showed 92%; the behavior metric caught 1 of 4 errors. Answer-level grading is essential, so an automatic grader checked against these hand labels is planned.
+- **The most dangerous error is a confident guess.** Turning "not in the documents" into "we don't offer that" sounds authoritative and is wrong. It needs explicit rules and dedicated handoff tests.
+- **Chunking decisions change answers.** Losing a document-level note ("税込") from a chunk produced a factually wrong claim.
+- **Coarse metrics hide problems.** Doc-level recall@5 was 100%, but section-level recall@1 was only 65.4%. The right document was found, but often not the right section.
+- **100% on a tuned test set isn't the finish line.** Each fix targeted failures already seen, so the next milestone adds new, harder, held-out questions before optimizing retrieval.
+
+### Next: Milestone 2 — retrieval quality
+
+1. Make the benchmark harder: noisy documents (blog posts, staff introductions, old campaigns), one chunk per FAQ entry, and ~15 new held-out questions.
+2. Re-baseline the current system on the harder set.
+3. Improve retrieval: Japanese keyword search with hybrid fusion, then reranking. Measured by section recall@1 and MRR.
+
 ## Roadmap
 
 Later milestones: FAQ-aware chunking, hybrid (keyword + dense) search, reranking, LINE integration, a web UI, and AWS deployment (Bedrock).
