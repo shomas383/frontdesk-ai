@@ -104,30 +104,43 @@ def run_eval(name: str, tenant_id: str, today: str, limit: int | None) -> tuple[
             mark = "ok" if row["behavior"] == row["expected_behavior"] else "XX"
             print(f"[{i:>2}/{len(questions)}] {q['id']} {mark} {row['behavior']:<15} {res.latency_ms:>5}ms")
 
-    summary = {
-        "run": out_path.name,
-        "config": {
-            "tenant": tenant_id,
-            "provider": get_settings().llm_provider,
-            "model": provider.model_id,
-            "embed_model": get_settings().embed_model,
-            "top_k": TOP_K,
-            "max_tokens": MAX_TOKENS,
-            "today": today,
-            "system_prompt_sha256": p_hash,
-            **git_provenance(),
-        },
-        "metrics": summarize(rows),
+    config = {
+        "tenant": tenant_id,
+        "provider": get_settings().llm_provider,
+        "model": provider.model_id,
+        "embed_model": get_settings().embed_model,
+        "top_k": TOP_K,
+        "max_tokens": MAX_TOKENS,
+        "today": today,
+        "system_prompt_sha256": p_hash,
+        **git_provenance(),
     }
-    tokens = summary["metrics"]["tokens"]
-    summary["metrics"]["estimated_cost_usd"] = estimate_cost_usd(
-        provider.model_id, tokens["input"], tokens["output"]
-    )
-    out_path.with_suffix(".summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    print_report(summary)
+    print_report(write_summary(out_path, config, rows))
     return out_path, rows
+
+
+def summary_path(run_path: Path) -> Path:
+    return run_path.with_suffix(".summary.json")
+
+
+def load_rows(run_path: Path) -> list[Row]:
+    with run_path.open(encoding="utf-8-sig") as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def write_summary(run_path: Path, config: dict[str, Any], rows: list[Row]) -> dict[str, Any]:
+    metrics = summarize(rows)
+    tokens = metrics["tokens"]
+    metrics["estimated_cost_usd"] = estimate_cost_usd(config["model"], tokens["input"], tokens["output"])
+    summary = {"run": run_path.name, "config": config, "metrics": metrics}
+    summary_path(run_path).write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    return summary
+
+
+def resummarize(run_path: Path) -> dict[str, Any]:
+    """Recompute metrics from a (possibly hand-labeled) run file, keeping the original config."""
+    config = json.loads(summary_path(run_path).read_text(encoding="utf-8"))["config"]
+    return write_summary(run_path, config, load_rows(run_path))
 
 
 def _pct(value: float | None) -> str:
@@ -140,6 +153,9 @@ def print_report(summary: dict[str, Any]) -> None:
     print(f"recall@{TOP_K}: {_pct(m['retrieval']['recall'])}  hit@{TOP_K}: {_pct(m['retrieval']['hit'])}"
           f"  (n={m['retrieval']['n']} questions with sources)")
     print(f"behavior accuracy: {_pct(m['behavior_accuracy'])}  (n={m['n']})")
+    hl = m["hand_label"]
+    print(f"hand-label accuracy: {_pct(hl['accuracy'])}  (labeled {hl['labeled_n']}/{m['n']})"
+          + (f"  incorrect: {hl['incorrect_ids']}" if hl["incorrect_ids"] else ""))
     fp = m["forbidden_phrases"]
     print(f"forbidden phrases on refuse_redirect: {_pct(fp['refuse_redirect_violation_rate'])}"
           f"  | flagged overall: {fp['all_flagged_count']} {fp['flagged_ids']}")
@@ -148,19 +164,27 @@ def print_report(summary: dict[str, Any]) -> None:
     cost_str = "n/a" if cost is None else f"${cost:.4f}"
     print(f"latency mean {lat['mean']:.0f}ms p95 {lat['p95']:.0f}ms | tokens in {m['tokens']['input']}"
           f" out {m['tokens']['output']} | est. cost {cost_str}")
-    print(f"\n{'category':<16}{'n':>4}{'behavior':>10}{'recall':>9}{'hit':>9}")
+    print(f"\n{'category':<16}{'n':>4}{'behavior':>10}{'hand':>9}{'recall':>9}{'hit':>9}")
     for cat, c in m["per_category"].items():
-        print(f"{cat:<16}{c['n']:>4}{_pct(c['behavior_acc']):>10}{_pct(c['recall']):>9}{_pct(c['hit']):>9}")
+        print(f"{cat:<16}{c['n']:>4}{_pct(c['behavior_acc']):>10}{_pct(c['hand_acc']):>9}"
+              f"{_pct(c['recall']):>9}{_pct(c['hit']):>9}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", required=True, help="short label for this run, e.g. baseline")
+    parser.add_argument("--name", help="short label for this run, e.g. baseline")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--resummarize", type=Path, metavar="RUN_JSONL",
+                        help="recompute the summary of an existing (hand-labeled) run; no API calls")
     args = parser.parse_args()
-    run_eval(args.name, args.tenant, args.today, args.limit)
+    if args.resummarize:
+        print_report(resummarize(args.resummarize))
+    elif args.name:
+        run_eval(args.name, args.tenant, args.today, args.limit)
+    else:
+        parser.error("pass --name to run the eval, or --resummarize RUN_JSONL")
 
 
 if __name__ == "__main__":

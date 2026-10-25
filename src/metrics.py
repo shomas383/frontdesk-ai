@@ -53,6 +53,16 @@ def behavior_accuracy(rows: list[Row]) -> float | None:
     return _mean([float(r["behavior"] == r["expected_behavior"]) for r in rows])
 
 
+def hand_label_accuracy(rows: list[Row]) -> dict[str, Any]:
+    """Accuracy over rows a human labeled (`correct` is true/false); unlabeled rows are skipped."""
+    labeled = [r for r in rows if isinstance(r.get("correct"), bool)]
+    return {
+        "labeled_n": len(labeled),
+        "accuracy": _mean([float(r["correct"]) for r in labeled]),
+        "incorrect_ids": [r["id"] for r in labeled if not r["correct"]],
+    }
+
+
 def forbidden_metrics(rows: list[Row]) -> dict[str, Any]:
     flagged = [r for r in rows if forbidden_phrases(r["answer"])]
     refuse = [r for r in rows if r["expected_behavior"] == "refuse_redirect"]
@@ -72,12 +82,15 @@ def per_category(rows: list[Row]) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for cat, rs in groups.items():
         retrieval = retrieval_metrics(rs)
+        labels = hand_label_accuracy(rs)
         result[cat] = {
             "n": len(rs),
             "behavior_acc": behavior_accuracy(rs),
             "retrieval_n": retrieval["n"],
             "recall": retrieval["recall"],
             "hit": retrieval["hit"],
+            "labeled_n": labels["labeled_n"],
+            "hand_acc": labels["accuracy"],
         }
     return result
 
@@ -97,6 +110,7 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
         "n": len(rows),
         "retrieval": retrieval_metrics(rows),
         "behavior_accuracy": behavior_accuracy(rows),
+        "hand_label": hand_label_accuracy(rows),
         "forbidden_phrases": forbidden_metrics(rows),
         "per_category": per_category(rows),
         "stop_reasons": dict(Counter(str(r["stop_reason"]) for r in rows)),

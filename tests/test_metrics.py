@@ -5,6 +5,7 @@ from src.metrics import (
     doc_hit,
     doc_recall,
     forbidden_phrases,
+    hand_label_accuracy,
     per_category,
     percentile,
     retrieval_metrics,
@@ -64,6 +65,20 @@ def test_behavior_accuracy_and_per_category():
     assert cats["out_of_scope"]["behavior_acc"] == 0.5
     assert cats["out_of_scope"]["recall"] is None
     assert cats["direct"]["recall"] == 1.0
+
+
+def test_hand_label_accuracy_skips_unlabeled_rows():
+    rows = [
+        {**_row("q1", "direct", [], []), "correct": True},
+        {**_row("q2", "direct", [], []), "correct": False},
+        {**_row("q3", "paraphrase", [], []), "correct": None},
+        _row("q4", "paraphrase", [], []),  # no field at all
+    ]
+    hl = hand_label_accuracy(rows)
+    assert hl == {"labeled_n": 2, "accuracy": 0.5, "incorrect_ids": ["q2"]}
+    cats = per_category(rows)
+    assert cats["direct"]["hand_acc"] == 0.5
+    assert cats["paraphrase"]["hand_acc"] is None
 
 
 def test_forbidden_phrases():

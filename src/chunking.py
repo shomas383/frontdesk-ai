@@ -39,24 +39,30 @@ def _unique(name: str, seen: dict[str, int]) -> str:
     return name if seen[name] == 1 else f"{name}-{seen[name]}"
 
 
+def _chunk(doc_id: str, section: str, text: str) -> Chunk:
+    return Chunk(chunk_id=f"{doc_id}#{section}", doc_id=doc_id, section=section, text=text)
+
+
 def split_markdown(doc_id: str, markdown: str) -> list[Chunk]:
+    """One chunk per `##` section. The doc preamble (text before the first `##`, e.g. "※税込")
+    is repeated in every chunk so doc-wide notes travel with each section."""
     lines = markdown.splitlines()
     title = _doc_title(lines, fallback=doc_id)
+    (_, preamble_lines), *sections = _split_sections(lines, title)
+    preamble = "\n".join(preamble_lines).strip()
+    header = f"# {title}\n{preamble}\n" if preamble else f"# {title}\n"
+
+    if not sections:  # no `##` at all: the whole doc is one chunk
+        return [_chunk(doc_id, title, header.strip())] if preamble else []
+
     chunks: list[Chunk] = []
     seen: dict[str, int] = {}
-    for section, body_lines in _split_sections(lines, title):
+    for section, body_lines in sections:
         body = "\n".join(body_lines).strip()
         if not body:
             continue
         section = _unique(section, seen)
-        chunks.append(
-            Chunk(
-                chunk_id=f"{doc_id}#{section}",
-                doc_id=doc_id,
-                section=section,
-                text=f"# {title}\n## {section}\n{body}",
-            )
-        )
+        chunks.append(_chunk(doc_id, section, f"{header}## {section}\n{body}"))
     return chunks
 
 

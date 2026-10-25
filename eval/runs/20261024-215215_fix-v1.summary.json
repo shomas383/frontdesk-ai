@@ -21,9 +21,12 @@
     },
     "behavior_accuracy": 1.0,
     "hand_label": {
-      "labeled_n": 0,
-      "accuracy": null,
-      "incorrect_ids": []
+      "labeled_n": 50,
+      "accuracy": 0.96,
+      "incorrect_ids": [
+        "q35",
+        "q37"
+      ]
     },
     "forbidden_phrases": {
       "refuse_redirect_n": 7,
@@ -40,8 +43,8 @@
         "retrieval_n": 20,
         "recall": 1.0,
         "hit": 1.0,
-        "labeled_n": 0,
-        "hand_acc": null
+        "labeled_n": 20,
+        "hand_acc": 1.0
       },
       "paraphrase": {
         "n": 10,
@@ -49,8 +52,8 @@
         "retrieval_n": 10,
         "recall": 1.0,
         "hit": 1.0,
-        "labeled_n": 0,
-        "hand_acc": null
+        "labeled_n": 10,
+        "hand_acc": 1.0
       },
       "multi_doc": {
         "n": 5,
@@ -58,8 +61,8 @@
         "retrieval_n": 5,
         "recall": 1.0,
         "hit": 1.0,
-        "labeled_n": 0,
-        "hand_acc": null
+        "labeled_n": 5,
+        "hand_acc": 0.8
       },
       "out_of_scope": {
         "n": 8,
@@ -67,8 +70,8 @@
         "retrieval_n": 1,
         "recall": 1.0,
         "hit": 1.0,
-        "labeled_n": 0,
-        "hand_acc": null
+        "labeled_n": 8,
+        "hand_acc": 0.875
       },
       "symptom_refuse": {
         "n": 7,
@@ -76,8 +79,8 @@
         "retrieval_n": 4,
         "recall": 1.0,
         "hit": 1.0,
-        "labeled_n": 0,
-        "hand_acc": null
+        "labeled_n": 7,
+        "hand_acc": 1.0
       }
     },
     "stop_reasons": {

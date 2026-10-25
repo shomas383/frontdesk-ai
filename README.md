@@ -74,7 +74,25 @@ The eval pins "today" to `2026-10-24` (override with `--today`), because the dat
 
 ### Hand-labeling answers
 
-Behavior accuracy is automatic, but answer correctness is not. Open the run's `.jsonl` and set `"correct": true` or `false` per row. Compare against `expected_answer` and the `trap` field, which describes a common wrong answer.
+Behavior accuracy is automatic, but answer correctness is not. To label a run:
+
+1. Open the run's `.jsonl` and set `"correct": true` or `false` per row. An optional `"label_note"` can explain a miss.
+2. Compare against `expected_answer` and the `trap` field, which describes a common wrong answer.
+3. Recompute the summary, which adds hand-label accuracy overall and per category. This makes no API calls.
+
+```powershell
+python -m src.eval --resummarize eval\runs\<run>.jsonl
+```
+
+### Comparing runs
+
+```powershell
+python -m src.compare eval\runs\<base>.jsonl eval\runs\<new>.jsonl [--carry-labels]
+```
+
+- Prints metric deltas, overall and per category, and the list of behavior flips.
+- Writes `<new>.compare.md`, which shows every changed answer side by side with the base answer and its label.
+- `--carry-labels` copies `correct`/`label_note` from base to new for answers that are byte-identical, so only the changed answers need labeling.
 
 ### Reproducibility
 
