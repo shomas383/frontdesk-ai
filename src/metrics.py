@@ -93,6 +93,23 @@ def section_metrics(rows: list[Row], k: int = 5) -> dict[str, Any]:
     }
 
 
+def context_metrics(rows: list[Row], k: int = 5) -> dict[str, Any]:
+    """Share of gold sections the LLM actually saw: the top-k plus any fully expanded small docs
+    (context_chunk_ids). Without expansion this equals section recall@k."""
+    scored = [r for r in rows if r.get("gold_chunks")]
+
+    def seen(r: Row) -> set[str]:
+        return set(r.get("context_chunk_ids") or r["retrieved_chunk_ids"][:k])
+
+    return {
+        "n": len(scored),
+        "recall": _mean([len(set(r["gold_chunks"]) & seen(r)) / len(set(r["gold_chunks"])) for r in scored]),
+        "expanded_n": sum(1 for r in rows if r.get("expanded_docs")),
+        "missed_gold": {r["id"]: sorted(set(r["gold_chunks"]) - seen(r))
+                        for r in scored if set(r["gold_chunks"]) - seen(r)},
+    }
+
+
 def behavior_ok(row: Row) -> bool:
     """Predicted behavior is the expected one, or one of the question's acceptable_behaviors."""
     return row["behavior"] in (row.get("acceptable_behaviors") or [row["expected_behavior"]])
@@ -184,6 +201,8 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
     }
     if any(r.get("split") for r in rows):
         summary["per_split"] = per_group(rows, "split")
+    if any("context_chunk_ids" in r for r in rows):
+        summary["context"] = context_metrics(rows)
     if any(r.get("guardrail") for r in rows):
         fired = [r["id"] for r in rows if (r.get("guardrail") or {}).get("fired")]
         summary["guardrail"] = {"fired": len(fired), "fired_ids": fired}
@@ -231,6 +250,8 @@ def aggregate_repeats(metrics: list[dict[str, Any]], runs_rows: list[list[Row]])
         "input_tokens": _stats([m["tokens"]["input"] for m in metrics]),
         "estimated_cost_usd": _stats([m.get("estimated_cost_usd") for m in metrics]),
         "flips": flip_table(runs_rows),
+        **({"context_recall": _stats([m["context"]["recall"] for m in metrics])}
+           if all("context" in m for m in metrics) else {}),
         **({"guardrail_fired": [m.get("guardrail", {}).get("fired_ids", []) for m in metrics]}
            if any("guardrail" in m for m in metrics) else {}),
     }

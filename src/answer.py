@@ -1,7 +1,7 @@
 """Answer one customer question: retrieval (top-k) + LLM with structured JSON output.
 
 Usage: python -m src.answer "60分の全身整体はいくらですか？" [--tenant ...] [--today 2026-10-24]
-                            [--retrieval dense|hybrid|rerank] [--doc-meta] [--guardrail]
+                            [--retrieval dense|hybrid|rerank] [--doc-meta] [--guardrail] [--small-docs]
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from src.doc_meta import load_doc_meta
 from src.guardrails import check_unstated_negative
 from src.llm import LLMProvider, get_provider
 from src.prompts import ANSWER_SCHEMA, build_user_message, system_prompt
-from src.retrieval import RETRIEVAL_MODES, retrieve
+from src.retrieval import RETRIEVAL_MODES, expand_small_docs, load_small_docs, retrieve
 
 # Shown to the customer whenever the pipeline fails; staff takes over.
 FALLBACK_ANSWER = "申し訳ございません。ただいま確認いたしますので、スタッフからご連絡いたします。"
@@ -41,6 +41,8 @@ class AnswerResult:
     invalid_sources: list[str] = field(default_factory=list)
     candidate_chunk_ids: list[str] = field(default_factory=list)
     guardrail: dict[str, object] | None = None  # set when the guardrail ran
+    expanded_docs: list[str] = field(default_factory=list)  # small docs shown in full
+    context_chunk_ids: list[str] = field(default_factory=list)  # chunks the LLM saw (incl. expanded docs)
     error: str | None = None
 
     @property
@@ -69,10 +71,14 @@ def answer_question(
     retrieval: str = "dense",
     doc_meta: bool = False,
     guardrail: bool = False,
+    small_docs: bool = False,
 ) -> AnswerResult:
     started = time.perf_counter()
     found = retrieve(conn, tenant_id, question, retrieval, k)
-    chunks = found.chunks
+    if small_docs:
+        chunks, expanded, covered = expand_small_docs(found.chunks, tenant_id, load_small_docs(tenant_id))
+    else:
+        chunks, expanded, covered = found.chunks, [], [c.chunk_id for c in found.chunks]
 
     llm_started = time.perf_counter()
     error: str | None = None
@@ -91,6 +97,7 @@ def answer_question(
     base = AnswerResult(
         answer=FALLBACK_ANSWER, behavior="handoff", sources=[], retrieved=found.details,
         latency_ms=total_ms, llm_latency_ms=llm_ms, candidate_chunk_ids=found.candidate_chunk_ids, error=error,
+        expanded_docs=expanded, context_chunk_ids=covered,
     )
     if result is None:
         return base
@@ -121,12 +128,13 @@ def main() -> None:
     parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     parser.add_argument("--doc-meta", action="store_true", help="show doc_type/dates from doc_meta.json to the LLM")
     parser.add_argument("--guardrail", action="store_true", help="rewrite unsupported 'currently unavailable' claims")
+    parser.add_argument("--small-docs", action="store_true", help="show small docs (retrieval.json) in full when hit")
     args = parser.parse_args()
 
     with db.connect() as conn:
         result = answer_question(
             conn, get_provider(), args.tenant, args.question, args.today,
-            retrieval=args.retrieval, doc_meta=args.doc_meta, guardrail=args.guardrail,
+            retrieval=args.retrieval, doc_meta=args.doc_meta, guardrail=args.guardrail, small_docs=args.small_docs,
         )
     print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
 

@@ -1,7 +1,7 @@
 """Run the eval set, save per-question results and print metrics.
 
 Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid|rerank]
-                          [--doc-meta] [--guardrail] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
+                          [--doc-meta] [--guardrail] [--small-docs] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
        python -m src.eval --resummarize RUN.jsonl | --aggregate RUNS.repeats.json
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
@@ -22,7 +22,7 @@ from src.doc_meta import meta_sha256
 from src.llm import get_provider
 from src.metrics import Row, aggregate_repeats, behavior_ok, forbidden_phrases, summarize
 from src.prompts import prompt_hash
-from src.retrieval import RETRIEVAL_MODES, retrieval_config, warm_up
+from src.retrieval import RETRIEVAL_MODES, load_small_docs, retrieval_config, warm_up
 
 # USD per million tokens (prompts <= 100K tokens).
 # Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-24).
@@ -91,6 +91,7 @@ def run_eval(
     doc_meta: bool = False,
     repeats: int = 1,
     guardrail: bool = False,
+    small_docs: bool = False,
 ) -> list[Path]:
     """Run the question set `repeats` times. With repeats > 1 each run is named <name>-r<i> and an
     aggregate (<ts>_<name>.repeats.json) with mean/min/max and a flip table is written at the end."""
@@ -114,6 +115,7 @@ def run_eval(
         "system_prompt_sha256": p_hash,
         "doc_meta": doc_meta,
         "guardrail": guardrail,
+        "small_docs": load_small_docs(tenant_id) if small_docs else [],
         **({"doc_meta_sha256": meta_sha256(tenant_id)} if doc_meta else {}),
         **provenance,
     }
@@ -127,7 +129,8 @@ def run_eval(
             if repeats > 1:
                 print(f"\n--- repeat {rep}/{repeats} ---")
             rows = _run_questions(
-                conn, provider, tenant_id, today, questions, out_path, p_hash, retrieval, doc_meta, guardrail
+                conn, provider, tenant_id, today, questions, out_path, p_hash, retrieval, doc_meta, guardrail,
+                small_docs,
             )
             run_config = {**config, **({"repeat": rep, "repeats": repeats} if repeats > 1 else {})}
             print_report(write_summary(out_path, run_config, rows))
@@ -148,13 +151,14 @@ def _run_questions(
     retrieval: str,
     doc_meta: bool,
     guardrail: bool,
+    small_docs: bool,
 ) -> list[Row]:
     rows: list[Row] = []
     with out_path.open("w", encoding="utf-8") as out:
         for i, q in enumerate(questions, 1):
             res = answer_question(
                 conn, provider, tenant_id, q["question"], today,
-                retrieval=retrieval, doc_meta=doc_meta, guardrail=guardrail,
+                retrieval=retrieval, doc_meta=doc_meta, guardrail=guardrail, small_docs=small_docs,
             )
             row: Row = {
                 "id": q["id"],
@@ -172,6 +176,8 @@ def _run_questions(
                 "retrieval_scores": [r["score"] for r in res.retrieved],
                 "retrieval_ranks": [{k[:-5]: v for k, v in r.items() if k.endswith("_rank")} for r in res.retrieved],
                 "candidate_chunk_ids": res.candidate_chunk_ids,
+                "expanded_docs": res.expanded_docs,
+                "context_chunk_ids": res.context_chunk_ids,
                 "answer": res.answer,
                 "behavior": res.behavior,
                 "sources": res.sources,
@@ -224,6 +230,9 @@ def print_aggregate(data: dict[str, Any]) -> None:
     print(f"{'latency mean ms':<30} mean {lat['mean']:.0f}  min {lat['min']:.0f}  max {lat['max']:.0f}")
     if cost["mean"] is not None:
         print(f"{'est. cost per run':<30} mean ${cost['mean']:.4f}")
+    if a.get("context_recall", {}).get("mean") is not None:
+        cr = a["context_recall"]
+        print(f"{'context recall':<30} mean {_pct(cr['mean'])}  min {_pct(cr['min'])}  max {_pct(cr['max'])}")
     if "guardrail_fired" in a:
         print(f"{'guardrail fired per run':<30} {a['guardrail_fired']}")
     print(f"labeled per run: {a['labeled']}")
@@ -303,6 +312,10 @@ def print_report(summary: dict[str, Any]) -> None:
               f"  hit@{TOP_K} {_pct(s[f'hit@{TOP_K}'])}  MRR {s['mrr']:.3f}  (n={s['n']} with gold_chunks)")
         for qid, missing in s["missed_gold"].items():
             print(f"  gold chunk not in top-{TOP_K}: {qid} {missing}")
+    c = m.get("context")
+    if c and c["n"]:
+        print(f"context recall (gold sections the LLM saw) {_pct(c['recall'])}  expanded in {c['expanded_n']} questions"
+              + (f"  still missing: {c['missed_gold']}" if c["missed_gold"] else ""))
     print(f"behavior accuracy: {_pct(m['behavior_accuracy'])}  (n={m['n']})")
     hl = m["hand_label"]
     print(f"hand-label accuracy: {_pct(hl['accuracy'])}  (labeled {hl['labeled_n']}/{m['n']})"
@@ -344,6 +357,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="show doc_type/dates from data/<tenant>/doc_meta.json to the LLM (off by default)")
     parser.add_argument("--guardrail", action="store_true",
                         help="rewrite unsupported 'currently unavailable' claims to a handoff (off by default)")
+    parser.add_argument("--small-docs", action="store_true",
+                        help="show small docs listed in data/<tenant>/retrieval.json in full when any chunk is hit")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)
@@ -369,7 +384,7 @@ def main() -> None:
         if args.repeats < 1:
             parser.error("--repeats must be >= 1")
         run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval, args.doc_meta,
-                 args.repeats, args.guardrail)
+                 args.repeats, args.guardrail, args.small_docs)
     else:
         parser.error("pass --name to run the eval, --resummarize RUN_JSONL or --aggregate REPEATS_JSON")
 

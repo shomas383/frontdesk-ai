@@ -7,13 +7,15 @@ the fused candidate pool), so a miss can be traced to the pool or to the final r
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from typing import Any
 
 import psycopg
 
 from src import db
-from src.config import TOP_K
+from src.chunking import split_markdown
+from src.config import DATA_DIR, TOP_K
 from src.db import RetrievedChunk
 from src.embeddings import embed_one
 from src.lexical import BM25, TOKENIZER_NAME, tokenize
@@ -128,3 +130,33 @@ def warm_up(conn: psycopg.Connection, tenant_id: str, mode: str) -> None:
         tokenize("warm-up")
     if mode == "rerank":
         score_pairs("warm-up", ["warm-up"])
+
+
+FULL_DOC_SECTION = "全文"
+
+
+def load_small_docs(tenant_id: str) -> list[str]:
+    """doc_ids whose full text replaces their chunks in the LLM context (data/<tenant>/retrieval.json)."""
+    path = DATA_DIR / tenant_id / "retrieval.json"
+    return list(json.loads(path.read_text(encoding="utf-8")).get("small_docs", [])) if path.is_file() else []
+
+
+def expand_small_docs(
+    chunks: list[RetrievedChunk], tenant_id: str, small_docs: list[str]
+) -> tuple[list[RetrievedChunk], list[str], list[str]]:
+    """Parent-document expansion for short docs: if any chunk of a small doc was retrieved, its chunks are
+    replaced by one full-document block placed where the doc's first chunk ranked. Retrieval itself
+    is untouched. Returns (context chunks, expanded doc_ids, chunk_ids covered by the context)."""
+    context: list[RetrievedChunk] = []
+    expanded: list[str] = []
+    covered: list[str] = []
+    for c in chunks:
+        if c.doc_id not in small_docs:
+            context.append(c)
+            covered.append(c.chunk_id)
+        elif c.doc_id not in expanded:
+            text = (DATA_DIR / tenant_id / "docs" / f"{c.doc_id}.md").read_text(encoding="utf-8").strip()
+            context.append(RetrievedChunk(f"{c.doc_id}#{FULL_DOC_SECTION}", c.doc_id, FULL_DOC_SECTION, text, c.score))
+            expanded.append(c.doc_id)
+            covered.extend(ch.chunk_id for ch in split_markdown(c.doc_id, text))
+    return context, expanded, list(dict.fromkeys(covered))
