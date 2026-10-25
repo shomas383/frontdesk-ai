@@ -17,6 +17,7 @@ from typing import Any
 from src import db
 from src.answer import answer_question
 from src.config import DEFAULT_TENANT, EVAL_DIR, MAX_TOKENS, ROOT_DIR, TOP_K, get_settings
+from src.doc_meta import meta_sha256
 from src.llm import get_provider
 from src.metrics import Row, forbidden_phrases, summarize
 from src.prompts import prompt_hash
@@ -145,6 +146,7 @@ def run_eval(
         "today": today,
         "questions_file": questions_file_label(questions_path),
         "system_prompt_sha256": p_hash,
+        "doc_meta_sha256": meta_sha256(tenant_id),
         **provenance,
     }
     print_report(write_summary(out_path, config, rows))

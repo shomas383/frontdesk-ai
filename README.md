@@ -24,6 +24,7 @@ question ──bge-m3──▶ top-5 cosine ──▶ Claude (JSON: answer, beha
 | [src/answer.py](src/answer.py) | Retrieval + LLM call → `AnswerResult` |
 | [src/retrieval.py](src/retrieval.py), [src/lexical.py](src/lexical.py), [src/rerank.py](src/rerank.py) | Retrieval modes (`dense`, `hybrid`: dense + BM25 via RRF, `rerank`: cross-encoder over the hybrid top 20); SudachiPy tokenizer + BM25; reranker |
 | [src/prompts.py](src/prompts.py) | Japanese system prompt and output JSON schema |
+| [src/doc_meta.py](src/doc_meta.py) | Loads `data/<tenant>/doc_meta.json` (doc_type `official`/`news`/`blog`/`campaign`, published/effective/valid_until dates) and shows it in each chunk's context header. It is not embedded, so retrieval is unaffected |
 | [src/llm.py](src/llm.py) | Provider interface (`LLM_PROVIDER=anthropic` or `bedrock`) |
 | [src/eval.py](src/eval.py), [src/metrics.py](src/metrics.py) | Eval runner and pure metric functions |
 

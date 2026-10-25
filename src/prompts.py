@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+from html import escape
 from typing import Any
 
 from src.db import RetrievedChunk
+from src.doc_meta import DocMeta, chunk_meta
 
 SYSTEM_PROMPT = """\
 あなたは整体院の受付スタッフとして、お客様からの質問にお答えするAIアシスタントです。
@@ -22,6 +24,7 @@ SYSTEM_PROMPT = """\
    - ブログ・コラム、終了したキャンペーン、「今日の日付」より前に終わったお知らせの内容は、現在の料金・空き状況・特典・販売の有無の根拠にはなりません。それらをもとに、現在も利用できる／もう利用できない、と断定しないでください。
    - 現在の情報が公式の資料（料金表・営業時間・予約規定など）にあれば、その内容で答えます（answer）。公式の資料にない場合は、必要に応じて「2025年に実施していました」など日付つきの事実を伝えたうえで、スタッフに確認する旨を伝え、handoff にしてください。
    - ブログやお知らせと公式の資料の内容が異なる場合は、公式の資料を優先します。ただし、期間中または今後の日付の特別な営業案内（臨時休業・年末年始など）や料金改定のお知らせは、上記のとおり優先します。
+   - 各 <chunk> には資料の種類 doc_type（official＝公式の資料、news＝お知らせ、blog＝ブログ・コラム、campaign＝キャンペーン）と、ある場合は published（掲載日）・effective（適用開始日）・valid_until（有効期限）が付いています。official の資料を優先し、valid_until が「今日の日付」より前の資料は終了したものとして扱ってください。期間中または今後の日付の news（臨時休業・年末年始など）と料金改定のお知らせは、上記のとおり優先します。
 4. 質問への答えが資料に書かれていない場合は、推測せずに「確認してスタッフからご連絡いたします」という趣旨を伝え、behavior を "handoff" にしてください。関連する情報が資料にあれば、補足として添えてもかまいません。
    - 資料に書かれていないことを理由に「行っておりません」「対応しておりません」「ございません」などと、サービスや設備がないと断定しないでください。資料に「行っていない」と明記されている場合を除き、ない・できないとは答えず、handoff にしてください。
    - 英語・中国語などの外国語での対応（言語対応）についての質問は、資料に明記がない限り、対応できるともできないとも断定せず、handoff にしてください。
@@ -55,12 +58,18 @@ def prompt_hash() -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
 
 
-def format_context(chunks: list[RetrievedChunk]) -> str:
-    blocks = [
-        f'<chunk doc_id="{c.doc_id}" section="{c.section}">\n{c.text}\n</chunk>' for c in chunks
-    ]
+def _chunk_header(c: RetrievedChunk, meta: DocMeta) -> str:
+    attrs = {"doc_id": c.doc_id, "section": c.section, **chunk_meta(meta, c.doc_id, c.section)}
+    return "<chunk " + " ".join(f'{k}="{escape(v)}"' for k, v in attrs.items()) + ">"
+
+
+def format_context(chunks: list[RetrievedChunk], meta: DocMeta | None = None) -> str:
+    """Chunks wrapped in <chunk> tags; doc metadata (doc_type, dates) becomes extra attributes."""
+    blocks = [f"{_chunk_header(c, meta or {})}\n{c.text}\n</chunk>" for c in chunks]
     return "<context>\n" + "\n".join(blocks) + "\n</context>"
 
 
-def build_user_message(question: str, chunks: list[RetrievedChunk], today: str) -> str:
-    return f"今日の日付: {today}\n\n{format_context(chunks)}\n\n<question>\n{question}\n</question>"
+def build_user_message(
+    question: str, chunks: list[RetrievedChunk], today: str, meta: DocMeta | None = None
+) -> str:
+    return f"今日の日付: {today}\n\n{format_context(chunks, meta)}\n\n<question>\n{question}\n</question>"

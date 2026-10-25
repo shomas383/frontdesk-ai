@@ -17,6 +17,7 @@ import psycopg
 
 from src import db
 from src.config import DEFAULT_TENANT, MAX_TOKENS, TOP_K
+from src.doc_meta import load_doc_meta
 from src.llm import LLMProvider, get_provider
 from src.prompts import ANSWER_SCHEMA, SYSTEM_PROMPT, build_user_message
 from src.retrieval import RETRIEVAL_MODES, retrieve
@@ -73,7 +74,10 @@ def answer_question(
     error: str | None = None
     try:
         result = provider.generate_json(
-            SYSTEM_PROMPT, build_user_message(question, chunks, today), ANSWER_SCHEMA, MAX_TOKENS
+            SYSTEM_PROMPT,
+            build_user_message(question, chunks, today, load_doc_meta(tenant_id)),
+            ANSWER_SCHEMA,
+            MAX_TOKENS,
         )
     except anthropic.APIError as exc:  # after the SDK's own retries
         result, error = None, f"{type(exc).__name__}: {exc}"

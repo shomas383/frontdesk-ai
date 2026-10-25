@@ -1,0 +1,28 @@
+{
+  "01_menu_prices": {"doc_type": "official", "effective": "2026-04-01"},
+  "02_hours": {"doc_type": "official"},
+  "03_access": {"doc_type": "official"},
+  "04_first_visit": {"doc_type": "official"},
+  "05_booking_cancellation": {"doc_type": "official"},
+  "06_faq": {"doc_type": "official"},
+  "07_news": {
+    "doc_type": "news",
+    "sections": {
+      "2026年10月15日　臨時休業のお知らせ": {"published": "2026-10-15", "valid_until": "2026-11-12"},
+      "2026年10月1日　年末年始の営業について": {"published": "2026-10-01", "valid_until": "2027-01-03"},
+      "2026年3月1日　料金改定のお知らせ": {"published": "2026-03-01", "effective": "2026-04-01"},
+      "2025年7月20日　夏季休業のお知らせ": {"published": "2025-07-20", "valid_until": "2025-08-16"}
+    }
+  },
+  "08_blog_katakori": {"doc_type": "blog", "published": "2025-11-10"},
+  "09_staff": {"doc_type": "official"},
+  "10_campaign_2025": {
+    "doc_type": "campaign",
+    "sections": {
+      "夏の回数券キャンペーン": {"valid_until": "2025-08-31"},
+      "お友だち紹介キャンペーン": {"valid_until": "2025-12-31"},
+      "年末ギフトのご案内": {"valid_until": "2025-12-31"}
+    }
+  },
+  "11_column_aftercare": {"doc_type": "blog", "published": "2026-02-14"}
+}
