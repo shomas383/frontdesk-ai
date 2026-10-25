@@ -22,7 +22,7 @@ question ──bge-m3──▶ top-5 cosine ──▶ Claude (JSON: answer, beha
 | [src/chunking.py](src/chunking.py) | Splits Markdown by `##` headings. `chunk_id = <doc_id>#<section>` |
 | [src/ingest.py](src/ingest.py) | Embeds and upserts a tenant's chunks. Re-runnable and removes stale chunks |
 | [src/answer.py](src/answer.py) | Retrieval + LLM call → `AnswerResult` |
-| [src/retrieval.py](src/retrieval.py), [src/lexical.py](src/lexical.py) | Retrieval modes (`dense`, `hybrid`: dense + BM25 via RRF); SudachiPy tokenizer + BM25 |
+| [src/retrieval.py](src/retrieval.py), [src/lexical.py](src/lexical.py), [src/rerank.py](src/rerank.py) | Retrieval modes (`dense`, `hybrid`: dense + BM25 via RRF, `rerank`: cross-encoder over the hybrid top 20); SudachiPy tokenizer + BM25; reranker |
 | [src/prompts.py](src/prompts.py) | Japanese system prompt and output JSON schema |
 | [src/llm.py](src/llm.py) | Provider interface (`LLM_PROVIDER=anthropic` or `bedrock`) |
 | [src/eval.py](src/eval.py), [src/metrics.py](src/metrics.py) | Eval runner and pure metric functions |
@@ -55,7 +55,8 @@ python -m src.answer "60分の全身整体はいくらですか？"
 python -m src.eval --name baseline
 #    Held-out set (reported per category and per `split`):
 python -m src.eval --name heldout --questions eval/questions_m2_heldout.jsonl
-#    Retrieval mode (default dense): hybrid = dense + Japanese BM25 (SudachiPy) fused by RRF
+#    Retrieval mode (default dense): hybrid = dense + Japanese BM25 (SudachiPy) fused by RRF;
+#    rerank = hybrid top-20 reordered by BAAI/bge-reranker-v2-m3 (local, ~2.3 GB, ~8 s/question on CPU)
 python -m src.eval --name hybrid --retrieval hybrid
 
 # Unit tests (no DB, API or model needed)

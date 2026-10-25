@@ -56,3 +56,20 @@ def test_retrieval_config_and_flag():
     assert build_parser().parse_args(["--name", "x", "--retrieval", "hybrid"]).retrieval == "hybrid"
     with pytest.raises(SystemExit):
         build_parser().parse_args(["--name", "x", "--retrieval", "bogus"])
+
+
+def test_rerank_orders_by_score_and_keeps_input_order_on_ties():
+    from src.db import RetrievedChunk
+    from src.rerank import rerank
+
+    chunks = [RetrievedChunk(f"d#{n}", "d", n, n, 0.0) for n in ("a", "b", "c")]
+    fake = {"a": 0.1, "b": 0.9, "c": 0.1}
+    out = rerank("q", chunks, scorer=lambda q, texts: [fake[t] for t in texts])
+    assert [(c.chunk_id, s) for c, s in out] == [("d#b", 0.9), ("d#a", 0.1), ("d#c", 0.1)]
+
+
+def test_rerank_config_records_model():
+    cfg = retrieval_config("rerank")
+    assert cfg["reranker"] == "BAAI/bge-reranker-v2-m3"
+    assert cfg["candidates"] == CANDIDATES
+    assert "reranker" not in retrieval_config("hybrid")

@@ -1,7 +1,7 @@
 """Answer one customer question: retrieval (top-k) + LLM with structured JSON output.
 
 Usage: python -m src.answer "60分の全身整体はいくらですか？" [--tenant ...] [--today 2026-10-24]
-                            [--retrieval dense|hybrid]
+                            [--retrieval dense|hybrid|rerank]
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ class AnswerResult:
     answer: str
     behavior: str
     sources: list[str]
-    retrieved: list[dict[str, object]]  # [{chunk_id, doc_id, score, dense_rank, keyword_rank}]
+    retrieved: list[dict[str, object]]  # [{chunk_id, doc_id, score, dense_rank, keyword_rank, ...}]
     latency_ms: int
     llm_latency_ms: int
     input_tokens: int = 0

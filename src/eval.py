@@ -1,6 +1,6 @@
 """Run the eval set, save per-question results and print metrics.
 
-Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid]
+Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid|rerank]
                           [--limit N] [--tenant ...] [--today 2026-10-24]
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
@@ -113,7 +113,7 @@ def run_eval(
                 "retrieved_chunk_ids": res.retrieved_chunk_ids,
                 "retrieved_doc_ids": res.retrieved_doc_ids,
                 "retrieval_scores": [r["score"] for r in res.retrieved],
-                "retrieval_ranks": [{"dense": r["dense_rank"], "keyword": r["keyword_rank"]} for r in res.retrieved],
+                "retrieval_ranks": [{k[:-5]: v for k, v in r.items() if k.endswith("_rank")} for r in res.retrieved],
                 "candidate_chunk_ids": res.candidate_chunk_ids,
                 "answer": res.answer,
                 "behavior": res.behavior,

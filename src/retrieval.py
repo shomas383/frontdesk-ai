@@ -1,4 +1,5 @@
-"""Retrieval strategies: dense (pgvector), hybrid (dense + BM25 via reciprocal rank fusion).
+"""Retrieval strategies: dense (pgvector), hybrid (dense + BM25 via reciprocal rank fusion),
+rerank (hybrid candidate pool reordered by a cross-encoder).
 
 Every mode returns the top-k chunks passed to the LLM plus diagnostics (ranks per retriever and
 the fused candidate pool), so a miss can be traced to the pool or to the final ranking.
@@ -16,8 +17,9 @@ from src.config import TOP_K
 from src.db import RetrievedChunk
 from src.embeddings import embed_one
 from src.lexical import BM25, TOKENIZER_NAME, tokenize
+from src.rerank import MAX_LENGTH, RERANK_MODEL, Scorer, rerank, score_pairs
 
-RETRIEVAL_MODES = ("dense", "hybrid")
+RETRIEVAL_MODES = ("dense", "hybrid", "rerank")
 CANDIDATES = 20  # per retriever, and the size of the fused candidate pool
 RRF_K = 60  # standard reciprocal-rank-fusion constant
 
@@ -25,7 +27,7 @@ RRF_K = 60  # standard reciprocal-rank-fusion constant
 @dataclass
 class Retrieval:
     chunks: list[RetrievedChunk]  # top-k, in the order shown to the LLM; score is mode-specific
-    details: list[dict[str, Any]]  # per chunk: chunk_id, doc_id, score, dense_rank, keyword_rank
+    details: list[dict[str, Any]]  # per chunk: chunk_id, doc_id, score, dense/keyword/fused ranks
     candidate_chunk_ids: list[str] = field(default_factory=list)
 
 
@@ -34,6 +36,8 @@ def retrieval_config(mode: str) -> dict[str, Any]:
     config: dict[str, Any] = {"retrieval": mode}
     if mode != "dense":
         config.update(candidates=CANDIDATES, rrf_k=RRF_K, tokenizer=TOKENIZER_NAME)
+    if mode == "rerank":
+        config.update(reranker=RERANK_MODEL, rerank_max_length=MAX_LENGTH)
     return config
 
 
@@ -73,16 +77,23 @@ def _ranks(ids: list[str]) -> dict[str, int]:
     return {cid: i for i, cid in enumerate(ids, 1)}
 
 
-def _details(chunks: list[RetrievedChunk], dense: dict[str, int], keyword: dict[str, int]) -> list[dict[str, Any]]:
+def _details(chunks: list[RetrievedChunk], *rankings: tuple[str, list[str]]) -> list[dict[str, Any]]:
+    """Per-chunk diagnostics: score plus its rank in each named ranking (None if absent)."""
+    ranks = {name: _ranks(ids) for name, ids in rankings}
     return [
         {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "score": round(c.score, 4),
-         "dense_rank": dense.get(c.chunk_id), "keyword_rank": keyword.get(c.chunk_id)}
+         **{f"{name}_rank": r.get(c.chunk_id) for name, r in ranks.items()}}
         for c in chunks
     ]
 
 
 def retrieve(
-    conn: psycopg.Connection, tenant_id: str, question: str, mode: str = "dense", k: int = TOP_K
+    conn: psycopg.Connection,
+    tenant_id: str,
+    question: str,
+    mode: str = "dense",
+    k: int = TOP_K,
+    scorer: Scorer = score_pairs,
 ) -> Retrieval:
     if mode not in RETRIEVAL_MODES:
         raise ValueError(f"unknown retrieval mode: {mode}")
@@ -90,16 +101,23 @@ def retrieve(
     if mode == "dense":
         chunks = db.search(conn, tenant_id, query_vec, k)
         ids = [c.chunk_id for c in chunks]
-        return Retrieval(chunks, _details(chunks, _ranks(ids), {}), ids)
+        return Retrieval(chunks, _details(chunks, ("dense", ids), ("keyword", [])), ids)
 
     dense = db.search(conn, tenant_id, query_vec, CANDIDATES)
     index = keyword_index(conn, tenant_id)
     keyword_ids = [index.chunks[i].chunk_id for i in index.bm25.top(tokenize(question), CANDIDATES)]
     dense_ids = [c.chunk_id for c in dense]
     fused = rrf_fuse([dense_ids, keyword_ids])[:CANDIDATES]
+    fused_ids = [cid for cid, _ in fused]
     by_id = {c.chunk_id: c for c in index.chunks}
-    chunks = [replace(by_id[cid], score=score) for cid, score in fused[:k]]
-    return Retrieval(chunks, _details(chunks, _ranks(dense_ids), _ranks(keyword_ids)), [cid for cid, _ in fused])
+    rankings = (("dense", dense_ids), ("keyword", keyword_ids), ("fused", fused_ids))
+
+    if mode == "hybrid":
+        chunks = [replace(by_id[cid], score=score) for cid, score in fused[:k]]
+    else:  # rerank the whole fused pool with the cross-encoder
+        reranked = rerank(question, [by_id[cid] for cid in fused_ids], scorer)
+        chunks = [replace(c, score=score) for c, score in reranked[:k]]
+    return Retrieval(chunks, _details(chunks, *rankings), fused_ids)
 
 
 def warm_up(conn: psycopg.Connection, tenant_id: str, mode: str) -> None:
@@ -108,3 +126,5 @@ def warm_up(conn: psycopg.Connection, tenant_id: str, mode: str) -> None:
     if mode != "dense":
         keyword_index(conn, tenant_id)
         tokenize("warm-up")
+    if mode == "rerank":
+        score_pairs("warm-up", ["warm-up"])
