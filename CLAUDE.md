@@ -3,7 +3,7 @@
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers from the clinic's own Markdown docs with citations, hands off to staff when the docs don't say, and never gives medical advice (`answer` / `handoff` / `refuse_redirect`). The point of the project is measured improvement: every change is a before/after on the eval set.
 
 ## Status
-- **Milestone 1 (baseline RAG + eval harness): complete** (commit `960376b`). fix-v2 got 100% on both behavior and hand labels for the 50 original questions.
+- **Milestone 1 (baseline RAG + eval harness): complete** (tag `milestone-1`). fix-v2 got 100% on both behavior and hand labels for the 50 original questions.
 - **Milestone 2 (retrieval quality on a harder benchmark): complete** (tag `milestone-2`). The results table is in README.md and the data note in [notes/MILESTONE2_DATA.md](notes/MILESTONE2_DATA.md).
   - Final configuration `m2-guardrail-v2`, 3 repeats:
     - hand-label 100% on both the original and held-out sets
@@ -18,6 +18,8 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - hybrid BM25+dense (`--retrieval hybrid`)
     - cross-encoder rerank (`--retrieval rerank`): raised r@1 by 8–12 points but hurt answers and cost 6× latency
     - doc metadata in the context (`--doc-meta`)
+- **Milestone 3 (automatic LLM answer grader, calibrated against the hand labels): planned, deferred** so the public demo can come first. The milestone number is intentionally skipped for now.
+- **Milestone 4 (public demo): in progress.** Web chat, LINE integration, AWS deployment (Bedrock) and a demo video.
 
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.

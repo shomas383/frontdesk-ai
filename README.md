@@ -226,9 +226,15 @@ The original 50 questions and the 20 held-out questions are shown side by side, 
 
 ### Next
 
-- An automatic answer grader, calibrated against the hand labels collected in M1 and M2.
-- More tenants and question styles, to see whether the stale-content rule and the guardrail generalize.
+See the [Roadmap](#roadmap). The automatic grader (M3) is deferred so the public demo (M4) can come first.
 
 ## Roadmap
 
-Later milestones: an automatic answer grader, LINE integration, a web UI, and AWS deployment (Bedrock). Hybrid search and reranking were tried in M2. They remain available as `--retrieval hybrid|rerank` but are not the default.
+| Milestone | Scope | Status |
+|---|---|---|
+| M1 — Baseline RAG pipeline and evaluation harness | Dense RAG, structured output, 50-question eval, hand labels | Complete (tag `milestone-1`) |
+| M2 — Retrieval quality on a harder benchmark | Noise docs, held-out set, hybrid/rerank experiments, stale-content rule, guardrail, small-docs expansion | Complete (tag `milestone-2`) |
+| M3 — Automatic answer grader | An LLM grader calibrated against the M1/M2 hand labels | Planned, deferred |
+| M4 — Public demo | Web chat, LINE integration, AWS deployment (Bedrock), demo video | In progress |
+
+Hybrid search and reranking were tried in M2. They remain available as `--retrieval hybrid|rerank` but are not the default.
