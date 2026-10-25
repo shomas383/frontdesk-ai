@@ -1,7 +1,7 @@
 """Answer one customer question: retrieval (top-k) + LLM with structured JSON output.
 
 Usage: python -m src.answer "60分の全身整体はいくらですか？" [--tenant ...] [--today 2026-10-24]
-                            [--retrieval dense|hybrid|rerank] [--doc-meta] [--guardrail] [--small-docs]
+                            [--retrieval dense|hybrid|rerank] [--doc-meta] [--no-guardrail] [--no-small-docs]
 """
 
 from __future__ import annotations
@@ -76,8 +76,8 @@ def answer_question(
     k: int = TOP_K,
     retrieval: str = "dense",
     doc_meta: bool = False,
-    guardrail: bool = False,
-    small_docs: bool = False,
+    guardrail: bool = True,
+    small_docs: bool = True,
 ) -> AnswerResult:
     started = time.perf_counter()
     found = retrieve(conn, tenant_id, question, retrieval, k)
@@ -134,8 +134,10 @@ def main() -> None:
     parser.add_argument("--today", default=date.today().isoformat())
     parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     parser.add_argument("--doc-meta", action="store_true", help="show doc_type/dates from doc_meta.json to the LLM")
-    parser.add_argument("--guardrail", action="store_true", help="rewrite unsupported 'currently unavailable' claims")
-    parser.add_argument("--small-docs", action="store_true", help="show small docs (retrieval.json) in full when hit")
+    parser.add_argument("--guardrail", action=argparse.BooleanOptionalAction, default=True,
+                        help="rewrite unsupported 'currently unavailable' claims (default: on)")
+    parser.add_argument("--small-docs", action=argparse.BooleanOptionalAction, default=True,
+                        help="show small docs (retrieval.json) in full when hit (default: on)")
     args = parser.parse_args()
 
     with db.connect() as conn:

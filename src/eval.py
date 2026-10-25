@@ -1,7 +1,7 @@
 """Run the eval set, save per-question results and print metrics.
 
 Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid|rerank]
-                          [--doc-meta] [--guardrail] [--small-docs] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
+                          [--doc-meta] [--no-guardrail] [--no-small-docs] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
        python -m src.eval --resummarize RUN.jsonl | --aggregate RUNS.repeats.json
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
@@ -90,8 +90,8 @@ def run_eval(
     retrieval: str = "dense",
     doc_meta: bool = False,
     repeats: int = 1,
-    guardrail: bool = False,
-    small_docs: bool = False,
+    guardrail: bool = True,
+    small_docs: bool = True,
 ) -> list[Path]:
     """Run the question set `repeats` times. With repeats > 1 each run is named <name>-r<i> and an
     aggregate (<ts>_<name>.repeats.json) with mean/min/max and a flip table is written at the end."""
@@ -355,10 +355,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     parser.add_argument("--doc-meta", action="store_true",
                         help="show doc_type/dates from data/<tenant>/doc_meta.json to the LLM (off by default)")
-    parser.add_argument("--guardrail", action="store_true",
-                        help="rewrite unsupported 'currently unavailable' claims to a handoff (off by default)")
-    parser.add_argument("--small-docs", action="store_true",
-                        help="show small docs listed in data/<tenant>/retrieval.json in full when any chunk is hit")
+    parser.add_argument("--guardrail", action=argparse.BooleanOptionalAction, default=True,
+                        help="rewrite unsupported 'currently unavailable' claims to a handoff (default: on)")
+    parser.add_argument("--small-docs", action=argparse.BooleanOptionalAction, default=True,
+                        help="show small docs listed in data/<tenant>/retrieval.json in full when any chunk is hit "
+                             "(default: on)")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)

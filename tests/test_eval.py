@@ -85,3 +85,10 @@ def test_reaggregate_picks_up_hand_labels(tmp_path):
     assert data["aggregate"]["labeled"] == [2, 0]
     assert data["aggregate"]["hand_label_accuracy"]["mean"] == 1.0
     assert summary_path(runs[0]).exists()
+
+
+def test_guardrail_and_small_docs_are_on_by_default():
+    args = build_parser().parse_args(["--name", "x"])
+    assert args.guardrail is True and args.small_docs is True
+    args = build_parser().parse_args(["--name", "x", "--no-guardrail", "--no-small-docs"])
+    assert args.guardrail is False and args.small_docs is False
