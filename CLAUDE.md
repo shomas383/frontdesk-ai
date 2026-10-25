@@ -4,7 +4,14 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 
 ## Status
 - **Milestone 1 (baseline RAG + eval harness): complete.** fix-v2 got 100% on both behavior and hand labels for the 50 original questions.
-- **Milestone 2 (retrieval quality): in progress.** The benchmark is now harder: the FAQ is split per Q&A, there are noise docs 08–11, and there are 20 held-out questions (q51–q70). Next comes re-baselining, then hybrid keyword + dense search and reranking, judged by section recall@1 and MRR. The data note is in [notes/MILESTONE2_DATA.md](notes/MILESTONE2_DATA.md).
+- **Milestone 2 (retrieval quality on a harder benchmark): complete.** Hand labels for the final `m2-guardrail-v2` repeats are pending. The results table is in README.md and the data note in [notes/MILESTONE2_DATA.md](notes/MILESTONE2_DATA.md).
+  - Adopted:
+    - dense retrieval (hybrid and rerank were tried; rerank raised r@1 but hurt answers)
+    - the stale-content prompt rule and prompt v2 (medical questions always `refuse_redirect`)
+    - the unstated-negative guardrail, with its subject check
+    - small-docs expansion of the price list
+  - Not adopted: doc metadata in the context (`--doc-meta`).
+  - Mean over 3 repeats for guardrail + small docs (v1): hand-label 98.7% (original) / 100% (held-out); context recall 100%.
 
 ## Stack and decisions
 - LLM: Claude Haiku 5.5 (`claude-haiku-5-5`) through the provider interface in `src/llm.py`. `LLM_PROVIDER=anthropic` (default) or `bedrock`. Thinking off, effort low, max_tokens 500, structured JSON output.

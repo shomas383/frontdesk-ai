@@ -2,13 +2,14 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestone 1 complete; Milestone 2 (retrieval quality) in progress.** Dense retrieval (bge-m3 + pgvector, top-5) → Claude with structured JSON output → a 50-question eval.
+**Status: Milestones 1 and 2 complete** (hand labels for the final M2 run pending). Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
 
 ## How it works
 
 ```
 data/<tenant>/docs/*.md ──ingest──▶ chunks (one per ## section) ──bge-m3──▶ Postgres/pgvector
-question ──bge-m3──▶ top-5 cosine ──▶ Claude (JSON: answer, behavior, sources) ──▶ eval metrics
+question ──bge-m3──▶ top-5 cosine (+ full doc for short docs) ──▶ Claude (JSON: answer, behavior, sources)
+         ──▶ guardrail (unsupported "currently unavailable" claims → handoff) ──▶ reply / eval metrics
 ```
 
 - **Multi-tenant ready.** Each clinic is a folder under `data/<tenant>/`, and every chunk row stores `tenant_id`.
@@ -169,12 +170,64 @@ Retrieval (unchanged across runs): doc recall@5 100%, **section recall@1 65.4%**
 - **Coarse metrics hide problems.** Doc-level recall@5 was 100%, but section-level recall@1 was only 65.4%. The right document was found, but often not the right section.
 - **100% on a tuned test set isn't the finish line.** Each fix targeted failures already seen, so the next milestone adds new, harder, held-out questions before optimizing retrieval.
 
-### Next: Milestone 2 — retrieval quality
+## Milestone 2 — Retrieval quality on a harder benchmark
 
-1. Make the benchmark harder: noisy documents (blog posts, staff introductions, old campaigns), one chunk per FAQ entry, and ~15 new held-out questions.
-2. Re-baseline the current system on the harder set.
-3. Improve retrieval: Japanese keyword search with hybrid fusion, then reranking. Measured by section recall@1 and MRR.
+**Goal:** make the benchmark harder, then improve retrieval and measure every change honestly, including on questions the earlier fixes were never tuned on.
+
+### What changed in the benchmark
+
+- **Noise documents:** a 2025 blog post with an old price and stale availability, expired 2025 campaigns, a staff page, and a long column. The FAQ is split into one chunk per Q&A, giving 51 chunks.
+- **20 held-out questions (q51–q70):** a new `distractor` category (old prices, expired campaigns, past notices) plus paraphrase, multi-doc, out-of-scope and symptom questions.
+- **Eval tooling:**
+  - `--questions` and per-split reporting
+  - `--repeats N` with mean/min/max and a flip table, recomputed after labeling with `--aggregate`
+  - `acceptable_behaviors`: q54 and q64 accept either `answer` or `handoff`
+  - context recall: the share of gold sections the LLM actually saw
+
+### Results
+
+The original 50 questions and the 20 held-out questions are shown side by side, as original / held-out. Rows with 3 repeats show the mean. Behavior is scored with `acceptable_behaviors` in every row. Prompt-only rows keep the baseline retrieval.
+
+| Run | Change | Repeats | Hand-label | Behavior | Section r@1 | MRR | Context recall | Latency |
+|---|---|---|---|---|---|---|---|---|
+| `m2-baseline` | M1 system on the harder data (dense, top-5) | 1 | 98% / 85% | 100% / 95% | 61.3% / 58.8% | 0.827 / 0.821 | 97.9% / 97.1% | 1.5 s |
+| `m2-hybrid` | + Japanese BM25 (SudachiPy), RRF fusion | 1 | 96% / 85% | 100% / 90% | 65.0% / 64.7% | 0.848 / 0.838 | 94.2% / 94.1% | 1.6 s |
+| `m2-rerank` | + bge-reranker-v2-m3 over the fused top 20 | 1 | 98% / **75%** | 100% / 85% | **69.6% / 70.6%** | **0.883 / 0.853** | 94.2% / 85.3% | **9.0 s** |
+| `m2-stale-rule` | dense; prompt: blog, expired campaigns and past notices are never evidence of what's current | 1 | 98% / 100% | 98% / 100% | = baseline | = baseline | 97.9% / 97.1% | 1.4 s |
+| `m2-authority` | + doc_type/date metadata in the context (not adopted) | 1 | 98% / 90% | 98% / 100% | = baseline | = baseline | 97.9% / 97.1% | 1.5 s |
+| `m2-stale-v2` | + medical questions always `refuse_redirect`; no staff follow-up on treatment effects | 3 | 98.0% / 96.7% | 100% / 98.3% | = baseline | = baseline | 97.9% / 97.1% | 1.4 s |
+| `m2-guardrail` | + post-generation guardrail for unstated negatives | 3 | 98.7% / 98.3% | 100% / 98.3% | = baseline | = baseline | 97.9% / 97.1% | 1.4 s |
+| `m2-smalldocs` | + full price list in the context when any of its chunks is hit | 3 | 98.7% / 100% | 99.3% / 98.3% | = baseline | = baseline | **100% / 100%** | 1.4 s |
+| `m2-guardrail-v2` | guardrail checks the claim's subject against the cited doc; **adopted as the default** | 3 | labels pending | 100% / 96.7% | = baseline | = baseline | **100% / 100%** | 1.5 s |
+
+- **Cost:** a full run costs about $0.017 (original set) and $0.007 (held-out).
+- **Run files:** in [eval/runs/](eval/runs/). Each 3-repeat row also has a `.repeats.json` aggregate.
+
+### Failures found and fixed
+
+| Question | Failure | Root cause | Fix |
+|---|---|---|---|
+| q55, q36, q56 | 「現在は紹介割引はございません」 or 「ギフト券のご用意はございません」 | The model turned a 2025 campaign that ended into a claim about today | Stale-content prompt rule, then a guardrail that removes "currently unavailable" claims no current, official source backs |
+| q36 (with small docs) | Same claim, now citing the price list | The full price list was in context, and it never mentions gift tickets | The guardrail only accepts an official doc if the claim's subject actually appears in it |
+| q64, q53 | Risk of repeating the blog's 「土曜午前が空いている」 or 6,600円 as current | Old blog text was retrieved | Stale-content rule; official docs override blog and news |
+| q49, q50 | Pregnancy question labeled `handoff`; "staff will confirm whether it cures" | Rule conflict between handoff and medical | Medical questions take precedence and are always `refuse_redirect`; no staff follow-up on effects |
+| q35 | Incomplete first-visit total (an open retrieval miss since M1) | The `初検料` section was not in the top 5 | The short price list is shown in full whenever any of its chunks is retrieved: complete in 3 of 3 repeats, versus 1 of 3 |
+| q52 (rerank) | 「水曜日は当院の定休日ではなく…」 | The reranker dropped the `定休日` chunk | Not adopted: dense stays the default |
+
+### What I learned
+
+- **Better ranking didn't mean better answers.** The reranker raised section recall@1 by 8–12 points and MRR by up to 0.056. But recall@5 fell, it introduced a confident factual error (q52), and held-out hand-label accuracy fell to 75%, all at six times the latency.
+- **The noise documents broke reasoning, not retrieval.** The right chunks were already retrieved; the model treated expired or blog content as current. A prompt rule and a narrow, deterministic guardrail fixed that, and retrieval changes didn't.
+- **Single runs are noise.** Identical runs varied by up to 15 points in held-out behavior accuracy, so every adopted change is measured over 3 repeats with a flip table.
+- **What the LLM sees matters more than rank.** Showing the whole price list fixed a retrieval miss that ranking never did. It also gave the model a document to over-generalize from, and the guardrail's subject check catches that.
+- **Metadata didn't beat a plain rule.** Adding document type and dates to the context cost about 10% more tokens and didn't improve on the stale-content rule.
+- **Calibrating a guardrail on hand labels pays off.** Replayed over all 980 labeled M2 answers, the final guardrail fires on exactly the answers labeled wrong for this failure, and never on an answer labeled correct.
+
+### Next
+
+- An automatic answer grader, calibrated against the hand labels collected in M1 and M2.
+- More tenants and question styles, to see whether the stale-content rule and the guardrail generalize.
 
 ## Roadmap
 
-Later milestones: FAQ-aware chunking, hybrid (keyword + dense) search, reranking, LINE integration, a web UI, and AWS deployment (Bedrock).
+Later milestones: an automatic answer grader, LINE integration, a web UI, and AWS deployment (Bedrock). Hybrid search and reranking were tried in M2. They remain available as `--retrieval hybrid|rerank` but are not the default.
