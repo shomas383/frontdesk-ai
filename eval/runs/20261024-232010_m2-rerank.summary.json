@@ -1,0 +1,163 @@
+{
+  "run": "20261024-232010_m2-rerank.jsonl",
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "rerank",
+    "candidates": 20,
+    "rrf_k": 60,
+    "tokenizer": "sudachi-core-A-normalized",
+    "reranker": "BAAI/bge-reranker-v2-m3",
+    "rerank_max_length": 512,
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions.jsonl",
+    "system_prompt_sha256": "4a79b2aa776a",
+    "git_commit": "f6d2dc46c9225eae8ff830d0b8f913b44d8f6587",
+    "git_dirty": false
+  },
+  "metrics": {
+    "n": 50,
+    "retrieval": {
+      "n": 41,
+      "recall": 1.0,
+      "hit": 1.0
+    },
+    "section_retrieval": {
+      "n": 40,
+      "recall@1": 0.6958333333333333,
+      "recall@3": 0.9083333333333334,
+      "recall@5": 0.9416666666666667,
+      "hit@5": 0.95,
+      "mrr": 0.8833333333333334,
+      "missed_gold": {
+        "q01": [
+          "01_menu_prices#コース料金"
+        ],
+        "q35": [
+          "01_menu_prices#初検料"
+        ],
+        "q45": [
+          "06_faq#強い痛み・しびれ"
+        ]
+      }
+    },
+    "behavior_accuracy": 1.0,
+    "hand_label": {
+      "labeled_n": 50,
+      "accuracy": 0.98,
+      "incorrect_ids": [
+        "q35"
+      ]
+    },
+    "forbidden_phrases": {
+      "refuse_redirect_n": 7,
+      "refuse_redirect_violation_rate": 0.0,
+      "all_flagged_count": 0,
+      "flagged_ids": []
+    },
+    "per_category": {
+      "direct": {
+        "n": 20,
+        "behavior_acc": 1.0,
+        "retrieval_n": 20,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 20,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 20,
+          "recall@1": 0.75,
+          "recall@3": 0.95,
+          "recall@5": 0.95,
+          "hit@5": 0.95,
+          "mrr": 0.9
+        }
+      },
+      "paraphrase": {
+        "n": 10,
+        "behavior_acc": 1.0,
+        "retrieval_n": 10,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 10,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 10,
+          "recall@1": 0.7,
+          "recall@3": 0.95,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 0.9
+        }
+      },
+      "multi_doc": {
+        "n": 5,
+        "behavior_acc": 1.0,
+        "retrieval_n": 5,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 5,
+        "hand_acc": 0.8,
+        "section": {
+          "n": 5,
+          "recall@1": 0.6666666666666667,
+          "recall@3": 0.8666666666666666,
+          "recall@5": 0.9333333333333333,
+          "hit@5": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "out_of_scope": {
+        "n": 8,
+        "behavior_acc": 1.0,
+        "retrieval_n": 2,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 8,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 1,
+          "recall@1": 1.0,
+          "recall@3": 1.0,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "symptom_refuse": {
+        "n": 7,
+        "behavior_acc": 1.0,
+        "retrieval_n": 4,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 7,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 4,
+          "recall@1": 0.375,
+          "recall@3": 0.625,
+          "recall@5": 0.75,
+          "hit@5": 0.75,
+          "mrr": 0.5833333333333334
+        }
+      }
+    },
+    "stop_reasons": {
+      "end_turn": 50
+    },
+    "errors": 0,
+    "latency_ms": {
+      "mean": 9176.62,
+      "p95": 10141.0
+    },
+    "tokens": {
+      "input": 113328,
+      "output": 5289
+    },
+    "estimated_cost_usd": 0.013977300000000002
+  }
+}

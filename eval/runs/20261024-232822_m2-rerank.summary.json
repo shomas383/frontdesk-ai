@@ -1,0 +1,203 @@
+{
+  "run": "20261024-232822_m2-rerank.jsonl",
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "rerank",
+    "candidates": 20,
+    "rrf_k": 60,
+    "tokenizer": "sudachi-core-A-normalized",
+    "reranker": "BAAI/bge-reranker-v2-m3",
+    "rerank_max_length": 512,
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions_m2_heldout.jsonl",
+    "system_prompt_sha256": "4a79b2aa776a",
+    "git_commit": "f6d2dc46c9225eae8ff830d0b8f913b44d8f6587",
+    "git_dirty": false
+  },
+  "metrics": {
+    "n": 20,
+    "retrieval": {
+      "n": 17,
+      "recall": 0.9411764705882353,
+      "hit": 0.9411764705882353
+    },
+    "section_retrieval": {
+      "n": 17,
+      "recall@1": 0.7058823529411765,
+      "recall@3": 0.8235294117647058,
+      "recall@5": 0.8529411764705882,
+      "hit@5": 0.8823529411764706,
+      "mrr": 0.8529411764705882,
+      "missed_gold": {
+        "q52": [
+          "02_hours#定休日"
+        ],
+        "q53": [
+          "01_menu_prices#コース料金"
+        ],
+        "q69": [
+          "06_faq#強い痛み・しびれ"
+        ]
+      }
+    },
+    "behavior_accuracy": 0.8,
+    "hand_label": {
+      "labeled_n": 20,
+      "accuracy": 0.75,
+      "incorrect_ids": [
+        "q52",
+        "q54",
+        "q55",
+        "q56",
+        "q64"
+      ]
+    },
+    "forbidden_phrases": {
+      "refuse_redirect_n": 2,
+      "refuse_redirect_violation_rate": 0.0,
+      "all_flagged_count": 0,
+      "flagged_ids": []
+    },
+    "per_category": {
+      "paraphrase": {
+        "n": 4,
+        "behavior_acc": 0.75,
+        "retrieval_n": 4,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 4,
+        "hand_acc": 0.75,
+        "section": {
+          "n": 4,
+          "recall@1": 0.625,
+          "recall@3": 0.75,
+          "recall@5": 0.75,
+          "hit@5": 0.75,
+          "mrr": 0.75
+        }
+      },
+      "distractor": {
+        "n": 6,
+        "behavior_acc": 0.5,
+        "retrieval_n": 5,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 6,
+        "hand_acc": 0.3333333333333333,
+        "section": {
+          "n": 5,
+          "recall@1": 0.7,
+          "recall@3": 0.8,
+          "recall@5": 0.9,
+          "hit@5": 1.0,
+          "mrr": 0.9
+        }
+      },
+      "direct": {
+        "n": 2,
+        "behavior_acc": 1.0,
+        "retrieval_n": 2,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 2,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 2,
+          "recall@1": 1.0,
+          "recall@3": 1.0,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "multi_doc": {
+        "n": 4,
+        "behavior_acc": 1.0,
+        "retrieval_n": 4,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 4,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 4,
+          "recall@1": 0.75,
+          "recall@3": 1.0,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "out_of_scope": {
+        "n": 2,
+        "behavior_acc": 1.0,
+        "retrieval_n": 0,
+        "recall": null,
+        "hit": null,
+        "labeled_n": 2,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 0,
+          "recall@1": null,
+          "recall@3": null,
+          "recall@5": null,
+          "hit@5": null,
+          "mrr": null
+        }
+      },
+      "symptom_refuse": {
+        "n": 2,
+        "behavior_acc": 1.0,
+        "retrieval_n": 2,
+        "recall": 0.5,
+        "hit": 0.5,
+        "labeled_n": 2,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 2,
+          "recall@1": 0.5,
+          "recall@3": 0.5,
+          "recall@5": 0.5,
+          "hit@5": 0.5,
+          "mrr": 0.5
+        }
+      }
+    },
+    "stop_reasons": {
+      "end_turn": 20
+    },
+    "errors": 0,
+    "latency_ms": {
+      "mean": 8808.45,
+      "p95": 9669.0
+    },
+    "tokens": {
+      "input": 45900,
+      "output": 2220
+    },
+    "per_split": {
+      "heldout_m2": {
+        "n": 20,
+        "behavior_acc": 0.8,
+        "retrieval_n": 17,
+        "recall": 0.9411764705882353,
+        "hit": 0.9411764705882353,
+        "labeled_n": 20,
+        "hand_acc": 0.75,
+        "section": {
+          "n": 17,
+          "recall@1": 0.7058823529411765,
+          "recall@3": 0.8235294117647058,
+          "recall@5": 0.8529411764705882,
+          "hit@5": 0.8823529411764706,
+          "mrr": 0.8529411764705882
+        }
+      }
+    },
+    "estimated_cost_usd": 0.0057
+  }
+}
