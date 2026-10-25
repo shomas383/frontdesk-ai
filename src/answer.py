@@ -1,7 +1,7 @@
 """Answer one customer question: retrieval (top-k) + LLM with structured JSON output.
 
 Usage: python -m src.answer "60分の全身整体はいくらですか？" [--tenant ...] [--today 2026-10-24]
-                            [--retrieval dense|hybrid|rerank] [--doc-meta]
+                            [--retrieval dense|hybrid|rerank] [--doc-meta] [--guardrail]
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ import psycopg
 from src import db
 from src.config import DEFAULT_TENANT, MAX_TOKENS, TOP_K
 from src.doc_meta import load_doc_meta
+from src.guardrails import check_unstated_negative
 from src.llm import LLMProvider, get_provider
 from src.prompts import ANSWER_SCHEMA, build_user_message, system_prompt
 from src.retrieval import RETRIEVAL_MODES, retrieve
@@ -39,6 +40,7 @@ class AnswerResult:
     stop_reason: str | None = None
     invalid_sources: list[str] = field(default_factory=list)
     candidate_chunk_ids: list[str] = field(default_factory=list)
+    guardrail: dict[str, object] | None = None  # set when the guardrail ran
     error: str | None = None
 
     @property
@@ -66,6 +68,7 @@ def answer_question(
     k: int = TOP_K,
     retrieval: str = "dense",
     doc_meta: bool = False,
+    guardrail: bool = False,
 ) -> AnswerResult:
     started = time.perf_counter()
     found = retrieve(conn, tenant_id, question, retrieval, k)
@@ -101,6 +104,12 @@ def answer_question(
     base.sources, base.invalid_sources = _split_sources(list(result.data["sources"]), allowed)
     base.answer = str(result.data["answer"])
     base.behavior = str(result.data["behavior"])
+    if guardrail:
+        check = check_unstated_negative(
+            base.answer, base.behavior, base.sources, chunks, load_doc_meta(tenant_id), today
+        )
+        base.guardrail = check.log_record(base.answer)
+        base.answer, base.behavior = check.answer, check.behavior
     return base
 
 
@@ -111,12 +120,13 @@ def main() -> None:
     parser.add_argument("--today", default=date.today().isoformat())
     parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     parser.add_argument("--doc-meta", action="store_true", help="show doc_type/dates from doc_meta.json to the LLM")
+    parser.add_argument("--guardrail", action="store_true", help="rewrite unsupported 'currently unavailable' claims")
     args = parser.parse_args()
 
     with db.connect() as conn:
         result = answer_question(
             conn, get_provider(), args.tenant, args.question, args.today,
-            retrieval=args.retrieval, doc_meta=args.doc_meta,
+            retrieval=args.retrieval, doc_meta=args.doc_meta, guardrail=args.guardrail,
         )
     print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
 

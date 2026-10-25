@@ -184,6 +184,9 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
     }
     if any(r.get("split") for r in rows):
         summary["per_split"] = per_group(rows, "split")
+    if any(r.get("guardrail") for r in rows):
+        fired = [r["id"] for r in rows if (r.get("guardrail") or {}).get("fired")]
+        summary["guardrail"] = {"fired": len(fired), "fired_ids": fired}
     return summary
 
 
@@ -228,4 +231,6 @@ def aggregate_repeats(metrics: list[dict[str, Any]], runs_rows: list[list[Row]])
         "input_tokens": _stats([m["tokens"]["input"] for m in metrics]),
         "estimated_cost_usd": _stats([m.get("estimated_cost_usd") for m in metrics]),
         "flips": flip_table(runs_rows),
+        **({"guardrail_fired": [m.get("guardrail", {}).get("fired_ids", []) for m in metrics]}
+           if any("guardrail" in m for m in metrics) else {}),
     }

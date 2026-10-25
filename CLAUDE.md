@@ -24,6 +24,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 |---|---|
 | `src/chunking.py`, `src/ingest.py` | split docs → embed → upsert (re-runnable, removes stale chunks) |
 | `src/retrieval.py`, `src/lexical.py`, `src/rerank.py` | retrieval modes + RRF; tokenizer + BM25; cross-encoder reranker |
+| `src/guardrails.py` | post-generation check (`--guardrail`, opt-in while measuring): an unsupported 'currently unavailable' claim (cited docs only blog / expired campaign or news, per `doc_meta.json`) is removed and the answer becomes a handoff; logged in the row's `guardrail` field |
 | `src/answer.py`, `src/prompts.py`, `src/llm.py` | retrieval + LLM call, the Japanese system prompt + JSON schema, providers |
 | `src/eval.py`, `src/metrics.py`, `src/compare.py` | eval runner, pure metric functions, run-vs-run diff |
 | `data/<tenant>/docs/` | clinic docs (source of truth for answers) |
@@ -37,7 +38,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 ## Commands
 ```
 python -m src.ingest --tenant komorebi-seitai-demo
-python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid|rerank] [--doc-meta] [--repeats 3] [--limit 5]
+python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid|rerank] [--doc-meta] [--guardrail] [--repeats 3] [--limit 5]
 python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.eval --aggregate eval/runs/<ts>_<name>.repeats.json   # after labeling repeats
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]

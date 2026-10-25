@@ -1,7 +1,7 @@
 """Run the eval set, save per-question results and print metrics.
 
 Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid|rerank]
-                          [--doc-meta] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
+                          [--doc-meta] [--guardrail] [--repeats N] [--limit N] [--tenant ...] [--today 2026-10-24]
        python -m src.eval --resummarize RUN.jsonl | --aggregate RUNS.repeats.json
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
@@ -90,6 +90,7 @@ def run_eval(
     retrieval: str = "dense",
     doc_meta: bool = False,
     repeats: int = 1,
+    guardrail: bool = False,
 ) -> list[Path]:
     """Run the question set `repeats` times. With repeats > 1 each run is named <name>-r<i> and an
     aggregate (<ts>_<name>.repeats.json) with mean/min/max and a flip table is written at the end."""
@@ -112,6 +113,7 @@ def run_eval(
         "questions_file": questions_file_label(questions_path),
         "system_prompt_sha256": p_hash,
         "doc_meta": doc_meta,
+        "guardrail": guardrail,
         **({"doc_meta_sha256": meta_sha256(tenant_id)} if doc_meta else {}),
         **provenance,
     }
@@ -124,7 +126,9 @@ def run_eval(
             out_path = runs_dir / f"{datetime.now():%Y%m%d-%H%M%S}_{run_name}.jsonl"
             if repeats > 1:
                 print(f"\n--- repeat {rep}/{repeats} ---")
-            rows = _run_questions(conn, provider, tenant_id, today, questions, out_path, p_hash, retrieval, doc_meta)
+            rows = _run_questions(
+                conn, provider, tenant_id, today, questions, out_path, p_hash, retrieval, doc_meta, guardrail
+            )
             run_config = {**config, **({"repeat": rep, "repeats": repeats} if repeats > 1 else {})}
             print_report(write_summary(out_path, run_config, rows))
             run_paths.append(out_path)
@@ -143,11 +147,15 @@ def _run_questions(
     p_hash: str,
     retrieval: str,
     doc_meta: bool,
+    guardrail: bool,
 ) -> list[Row]:
     rows: list[Row] = []
     with out_path.open("w", encoding="utf-8") as out:
         for i, q in enumerate(questions, 1):
-            res = answer_question(conn, provider, tenant_id, q["question"], today, retrieval=retrieval, doc_meta=doc_meta)
+            res = answer_question(
+                conn, provider, tenant_id, q["question"], today,
+                retrieval=retrieval, doc_meta=doc_meta, guardrail=guardrail,
+            )
             row: Row = {
                 "id": q["id"],
                 "category": q["category"],
@@ -169,6 +177,7 @@ def _run_questions(
                 "sources": res.sources,
                 "invalid_sources": res.invalid_sources,
                 "forbidden_phrases": forbidden_phrases(res.answer),
+                "guardrail": res.guardrail,
                 "stop_reason": res.stop_reason,
                 "latency_ms": res.latency_ms,
                 "llm_latency_ms": res.llm_latency_ms,
@@ -181,7 +190,8 @@ def _run_questions(
             out.write(json.dumps(row, ensure_ascii=False) + "\n")
             rows.append(row)
             mark = "ok" if behavior_ok(row) else "XX"
-            print(f"[{i:>2}/{len(questions)}] {q['id']} {mark} {row['behavior']:<15} {res.latency_ms:>5}ms")
+            fired = " [guardrail]" if (res.guardrail or {}).get("fired") else ""
+            print(f"[{i:>2}/{len(questions)}] {q['id']} {mark} {row['behavior']:<15} {res.latency_ms:>5}ms{fired}")
     return rows
 
 
@@ -214,6 +224,8 @@ def print_aggregate(data: dict[str, Any]) -> None:
     print(f"{'latency mean ms':<30} mean {lat['mean']:.0f}  min {lat['min']:.0f}  max {lat['max']:.0f}")
     if cost["mean"] is not None:
         print(f"{'est. cost per run':<30} mean ${cost['mean']:.4f}")
+    if "guardrail_fired" in a:
+        print(f"{'guardrail fired per run':<30} {a['guardrail_fired']}")
     print(f"labeled per run: {a['labeled']}")
     print(f"\nflips / misses ({len(a['flips'])}):")
     for f in a["flips"]:
@@ -298,6 +310,8 @@ def print_report(summary: dict[str, Any]) -> None:
     fp = m["forbidden_phrases"]
     print(f"forbidden phrases on refuse_redirect: {_pct(fp['refuse_redirect_violation_rate'])}"
           f"  | flagged overall: {fp['all_flagged_count']} {fp['flagged_ids']}")
+    if "guardrail" in m:
+        print(f"guardrail fired: {m['guardrail']['fired']} {m['guardrail']['fired_ids']}")
     print(f"stop_reasons: {m['stop_reasons']}  errors: {m['errors']}")
     lat, cost = m["latency_ms"], m["estimated_cost_usd"]
     cost_str = "n/a" if cost is None else f"${cost:.4f}"
@@ -328,6 +342,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     parser.add_argument("--doc-meta", action="store_true",
                         help="show doc_type/dates from data/<tenant>/doc_meta.json to the LLM (off by default)")
+    parser.add_argument("--guardrail", action="store_true",
+                        help="rewrite unsupported 'currently unavailable' claims to a handoff (off by default)")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)
@@ -353,7 +369,7 @@ def main() -> None:
         if args.repeats < 1:
             parser.error("--repeats must be >= 1")
         run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval, args.doc_meta,
-                 args.repeats)
+                 args.repeats, args.guardrail)
     else:
         parser.error("pass --name to run the eval, --resummarize RUN_JSONL or --aggregate REPEATS_JSON")
 
