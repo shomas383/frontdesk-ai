@@ -318,3 +318,10 @@ See the [Roadmap](#roadmap). The automatic grader (M3) is deferred so the public
 | M4 — Public demo | Web chat, LINE integration, AWS deployment (Bedrock), demo video | In progress |
 
 Hybrid search and reranking were tried in M2. They remain available as `--retrieval hybrid|rerank` but are not the default.
+
+### Backlog
+
+- **Unneeded staff follow-up on fully answered questions.** When the official docs fully answer a question, the bot sometimes still adds 「スタッフが確認のうえご案内」. For example, it corrects a blog's 6,600円 to the current 7,150円 and then defers to staff anyway, which makes a correct answer sound uncertain. Seen in the web-chat screenshots (2026-10-25), where `behavior` stayed `answer`.
+  - Candidate fix: a prompt rule that tells the model not to add a handoff sentence when the cited official docs answer the question completely.
+  - Check it with a 3-repeat eval on both question sets, plus a count of answer-behavior rows that contain a handoff phrase.
+  - Watch that it doesn't suppress real handoffs (q36, q54, q64) or the medical redirects.

@@ -23,6 +23,12 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
   - Step 1 done: local API (`src/app.py`) + Dockerfile + compose `app` profile. See README "API (local)".
   - Step 2 done: web chat at `GET /` (`src/static/`, no build step or CDNs; strict CSP, so no inline script or style).
 
+## Backlog (not started)
+- **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.
+  - Candidate prompt fix, measured as its own step (commit + 3 repeats on both sets).
+  - Also count answer-behavior rows that contain handoff phrases.
+  - Check that real handoffs (q36/q54/q64) and medical redirects don't regress.
+
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.
 
