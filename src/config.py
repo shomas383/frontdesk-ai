@@ -47,3 +47,42 @@ def get_settings() -> Settings:
         ),
         embed_model=os.getenv("EMBED_MODEL", "BAAI/bge-m3"),
     )
+
+
+def _int_env(name: str, default: int) -> int:
+    value = os.getenv(name, "").strip()
+    return int(value) if value else default
+
+
+def _list_env(name: str, default: str = "") -> tuple[str, ...]:
+    return tuple(v.strip() for v in os.getenv(name, default).split(",") if v.strip())
+
+
+@dataclass(frozen=True)
+class AppSettings:
+    """API limits and behavior (src/app.py); documented in .env.example."""
+
+    allowed_tenants: tuple[str, ...] = (DEFAULT_TENANT,)
+    max_message_chars: int = 300
+    rate_limit_per_minute: int = 10
+    rate_limit_per_day: int = 50
+    daily_question_cap: int = 500
+    daily_token_budget: int = 2_000_000  # input + output tokens per JST day
+    app_today: str = ""  # empty: the real date in Asia/Tokyo; set (e.g. 2026-10-24) to pin it like eval
+    trust_proxy_headers: bool = False  # use X-Forwarded-For (only behind a trusted proxy/load balancer)
+    cors_origins: tuple[str, ...] = ()
+
+
+def get_app_settings() -> AppSettings:
+    load_dotenv(ROOT_DIR / ".env")
+    return AppSettings(
+        allowed_tenants=_list_env("ALLOWED_TENANTS", DEFAULT_TENANT),
+        max_message_chars=_int_env("MAX_MESSAGE_CHARS", 300),
+        rate_limit_per_minute=_int_env("RATE_LIMIT_PER_MINUTE", 10),
+        rate_limit_per_day=_int_env("RATE_LIMIT_PER_DAY", 50),
+        daily_question_cap=_int_env("DAILY_QUESTION_CAP", 500),
+        daily_token_budget=_int_env("DAILY_TOKEN_BUDGET", 2_000_000),
+        app_today=os.getenv("APP_TODAY", "").strip(),
+        trust_proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "").strip().lower() in ("1", "true", "yes"),
+        cors_origins=_list_env("CORS_ORIGINS"),
+    )
