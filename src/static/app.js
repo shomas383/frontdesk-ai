@@ -27,6 +27,9 @@ const sendButton = $("send");
 const form = $("composer");
 const suggestions = $("suggestions");
 const chips = $("chips");
+const banner = $("banner");
+const composer = $("composer");
+const desktop = window.matchMedia("(min-width: 720px)");
 
 const state = {
   tenant: null,
@@ -133,6 +136,7 @@ async function ask(text) {
     return;
   }
   suggestions.hidden = true;
+  banner.classList.add("compact");
   addUserMessage(message);
   state.busy = true;
   updateComposer();
@@ -163,6 +167,16 @@ async function ask(text) {
   }
 }
 
+// Desktop: chips sit right under the welcome message. Phones: just above the composer, near the thumb.
+function placeSuggestions() {
+  if (desktop.matches) {
+    const welcome = chat.querySelector(".msg.bot");
+    if (welcome) welcome.after(suggestions);
+  } else {
+    composer.before(suggestions);
+  }
+}
+
 function renderSuggestions() {
   for (const question of SUGGESTIONS) {
     const chip = el("button", "chip", question);
@@ -184,6 +198,8 @@ async function runDemo() {
 async function init() {
   renderSuggestions();
   addBotMessage(WELCOME);
+  placeSuggestions();
+  desktop.addEventListener("change", placeSuggestions);
   let config = {};
   try {
     const response = await fetch("/api/config");

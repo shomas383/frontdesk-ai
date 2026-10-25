@@ -19,6 +19,7 @@ def test_index_serves_the_chat_page():
     assert res.headers["content-type"].startswith("text/html")
     html = res.text
     assert BANNER in html
+    assert "架空の整体院のデモ・個人情報は入力しないでください" in html  # compact banner after the first question
     assert "AI front desk demo for a small Japanese clinic" in html
     assert "About this demo" in html and REPO_URL in html
     assert 'src="/static/app.js"' in html and 'href="/static/style.css"' in html

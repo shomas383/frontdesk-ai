@@ -69,10 +69,16 @@ body {
   background: var(--bg);
 }
 
-/* Header */
+/* Header: a solid bar above the chat. The chat scrolls in its own area below it, never underneath. */
 .header {
-  padding: 14px 16px 10px;
-  padding-top: max(14px, env(safe-area-inset-top));
+  position: relative;
+  z-index: 1;
+  flex: none;
+  padding: 12px 16px 12px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 8px rgba(38, 48, 42, 0.06);
 }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand-mark { flex: none; border-radius: 10px; }
@@ -80,9 +86,9 @@ body {
 .title-sub { color: var(--brand); white-space: nowrap; }
 .subtitle { margin: 2px 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.4; }
 
-/* Banner */
+/* Banner: full disclaimer until the first question, then one compact line. */
 .banner {
-  margin: 0 16px;
+  margin: 10px 0 0;
   padding: 10px 14px;
   border-radius: 12px;
   background: var(--banner-bg);
@@ -91,7 +97,34 @@ body {
   line-height: 1.6;
 }
 .banner p { margin: 0; }
-.banner-link { color: inherit; font-weight: 600; font-size: 0.78rem; text-underline-offset: 2px; }
+.banner-link { color: inherit; font-weight: 600; font-size: 0.78rem; text-underline-offset: 2px; white-space: nowrap; }
+.banner-short { display: none; }
+.banner.compact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 5px 12px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+.banner.compact .banner-full { display: none; }
+.banner.compact .banner-short {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.banner.compact .banner-link { font-size: 0.72rem; }
+.about-short { display: none; }
+/* Phones: the compact line must keep the whole disclaimer visible, so the link gets shorter. */
+@media (max-width: 480px) {
+  .banner.compact { gap: 6px; padding: 5px 10px; font-size: 0.7rem; }
+  .banner.compact .about-long { display: none; }
+  .banner.compact .about-short { display: inline; }
+}
 
 /* Chat */
 .chat {
@@ -156,8 +189,9 @@ body {
 .typing span:nth-child(3) { animation-delay: 0.3s; }
 @keyframes blink { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 
-/* Suggestions */
-.suggestions { padding: 0 16px 8px; }
+/* Suggestions: above the composer on phones; moved under the welcome message on desktop (app.js). */
+.suggestions { flex: none; padding: 0 16px 8px; }
+.chat .suggestions { padding: 0; margin-top: -4px; }
 .suggestions[hidden] { display: none; }
 .suggestions-label { margin: 0 0 6px; font-size: 0.75rem; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -233,7 +267,7 @@ textarea:focus { outline: 2px solid var(--brand); outline-offset: 0; border-colo
 }
 
 @media (min-width: 720px) {
-  .app { padding: 0 8px; }
+  .app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
   .title { font-size: 1.3rem; }
   .msg { max-width: 76%; }
 }
