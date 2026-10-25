@@ -2,7 +2,7 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestone 1, baseline.** Dense retrieval (bge-m3 + pgvector, top-5) → Claude with structured JSON output → a 50-question eval.
+**Status: Milestone 1 complete; Milestone 2 (retrieval quality) in progress.** Dense retrieval (bge-m3 + pgvector, top-5) → Claude with structured JSON output → a 50-question eval.
 
 ## How it works
 
@@ -98,7 +98,7 @@ python -m src.compare eval\runs\<base>.jsonl eval\runs\<new>.jsonl [--carry-labe
 
 ### Reproducibility
 
-`summary.json` records `git_commit`, which needs a git repo. Run `git init` and commit before an eval run you want to cite; until then the field is `null`.
+`summary.json` records `git_commit` and `git_dirty`, which is true when there are uncommitted code changes; files under `eval/runs/` are ignored. Commit before an eval run you want to cite, so that `git_dirty` is `false`.
 
 ## Configuration (.env)
 
