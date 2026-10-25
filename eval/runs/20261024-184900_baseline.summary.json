@@ -20,6 +20,16 @@
       "hit": 1.0
     },
     "behavior_accuracy": 0.98,
+    "hand_label": {
+      "labeled_n": 50,
+      "accuracy": 0.92,
+      "incorrect_ids": [
+        "q27",
+        "q35",
+        "q37",
+        "q39"
+      ]
+    },
     "forbidden_phrases": {
       "refuse_redirect_n": 7,
       "refuse_redirect_violation_rate": 0.0,
@@ -32,35 +42,45 @@
         "behavior_acc": 1.0,
         "retrieval_n": 20,
         "recall": 1.0,
-        "hit": 1.0
+        "hit": 1.0,
+        "labeled_n": 20,
+        "hand_acc": 1.0
       },
       "paraphrase": {
         "n": 10,
         "behavior_acc": 1.0,
         "retrieval_n": 10,
         "recall": 1.0,
-        "hit": 1.0
+        "hit": 1.0,
+        "labeled_n": 10,
+        "hand_acc": 0.9
       },
       "multi_doc": {
         "n": 5,
         "behavior_acc": 1.0,
         "retrieval_n": 5,
         "recall": 1.0,
-        "hit": 1.0
+        "hit": 1.0,
+        "labeled_n": 5,
+        "hand_acc": 0.8
       },
       "out_of_scope": {
         "n": 8,
         "behavior_acc": 0.875,
         "retrieval_n": 1,
         "recall": 1.0,
-        "hit": 1.0
+        "hit": 1.0,
+        "labeled_n": 8,
+        "hand_acc": 0.75
       },
       "symptom_refuse": {
         "n": 7,
         "behavior_acc": 1.0,
         "retrieval_n": 4,
         "recall": 1.0,
-        "hit": 1.0
+        "hit": 1.0,
+        "labeled_n": 7,
+        "hand_acc": 1.0
       }
     },
     "stop_reasons": {

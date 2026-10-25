@@ -1,0 +1,97 @@
+{
+  "run": "20261024-215215_fix-v1.jsonl",
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "system_prompt_sha256": "bb59d2def454",
+    "git_commit": "01f550576af24225543fe50b29dc522c28562208",
+    "git_dirty": true
+  },
+  "metrics": {
+    "n": 50,
+    "retrieval": {
+      "n": 40,
+      "recall": 1.0,
+      "hit": 1.0
+    },
+    "behavior_accuracy": 1.0,
+    "hand_label": {
+      "labeled_n": 0,
+      "accuracy": null,
+      "incorrect_ids": []
+    },
+    "forbidden_phrases": {
+      "refuse_redirect_n": 7,
+      "refuse_redirect_violation_rate": 0.14285714285714285,
+      "all_flagged_count": 1,
+      "flagged_ids": [
+        "q44"
+      ]
+    },
+    "per_category": {
+      "direct": {
+        "n": 20,
+        "behavior_acc": 1.0,
+        "retrieval_n": 20,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 0,
+        "hand_acc": null
+      },
+      "paraphrase": {
+        "n": 10,
+        "behavior_acc": 1.0,
+        "retrieval_n": 10,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 0,
+        "hand_acc": null
+      },
+      "multi_doc": {
+        "n": 5,
+        "behavior_acc": 1.0,
+        "retrieval_n": 5,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 0,
+        "hand_acc": null
+      },
+      "out_of_scope": {
+        "n": 8,
+        "behavior_acc": 1.0,
+        "retrieval_n": 1,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 0,
+        "hand_acc": null
+      },
+      "symptom_refuse": {
+        "n": 7,
+        "behavior_acc": 1.0,
+        "retrieval_n": 4,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 0,
+        "hand_acc": null
+      }
+    },
+    "stop_reasons": {
+      "end_turn": 50
+    },
+    "errors": 0,
+    "latency_ms": {
+      "mean": 1572.6,
+      "p95": 2619.0
+    },
+    "tokens": {
+      "input": 123856,
+      "output": 5263
+    },
+    "estimated_cost_usd": 0.0150171
+  }
+}
