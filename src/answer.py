@@ -16,7 +16,7 @@ import anthropic
 import psycopg
 
 from src import db
-from src.config import DEFAULT_TENANT, MAX_TOKENS, TOP_K
+from src.config import DATA_DIR, DEFAULT_TENANT, MAX_TOKENS, TOP_K
 from src.doc_meta import load_doc_meta
 from src.guardrails import check_unstated_negative
 from src.llm import LLMProvider, get_provider
@@ -59,6 +59,12 @@ def _split_sources(cited: list[str], allowed: list[str]) -> tuple[list[str], lis
     valid = [s for s in dict.fromkeys(cited) if s in allowed]
     invalid = [s for s in dict.fromkeys(cited) if s not in allowed]
     return valid, invalid
+
+
+def _doc_texts(tenant_id: str, doc_ids: list[str]) -> dict[str, str]:
+    """Full text of each doc (for the guardrail's subject check); missing files are skipped."""
+    paths = {d: DATA_DIR / tenant_id / "docs" / f"{d}.md" for d in doc_ids}
+    return {d: p.read_text(encoding="utf-8") for d, p in paths.items() if p.is_file()}
 
 
 def answer_question(
@@ -113,7 +119,8 @@ def answer_question(
     base.behavior = str(result.data["behavior"])
     if guardrail:
         check = check_unstated_negative(
-            base.answer, base.behavior, base.sources, chunks, load_doc_meta(tenant_id), today
+            base.answer, base.behavior, base.sources, chunks, load_doc_meta(tenant_id), today,
+            doc_texts=_doc_texts(tenant_id, base.sources),
         )
         base.guardrail = check.log_record(base.answer)
         base.answer, base.behavior = check.answer, check.behavior
