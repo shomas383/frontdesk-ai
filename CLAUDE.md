@@ -8,7 +8,8 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 
 ## Stack and decisions
 - LLM: Claude Haiku 5.5 (`claude-haiku-5-5`) through the provider interface in `src/llm.py`. `LLM_PROVIDER=anthropic` (default) or `bedrock`. Thinking off, effort low, max_tokens 500, structured JSON output.
-- Embeddings: `BAAI/bge-m3` (1024-dim, normalized, CPU). Dense top-5 cosine retrieval.
+- Embeddings: `BAAI/bge-m3` (1024-dim, normalized, CPU). Retrieval modes (`--retrieval`): `dense` (default; top-5 cosine) and `hybrid` (dense top-20 + BM25 top-20 → RRF k=60 → top 5).
+- Keyword search: pure-Python BM25 with SudachiPy (core dict, mode A, normalized forms) in `src/lexical.py`. pg_bigm and PGroonga aren't packaged for the `pgvector/pgvector:pg17` image (checked 2026-10-24), so they'd need a custom Dockerfile.
 - DB: Postgres 17 + pgvector in Docker on **host port 5433**. 5432 belongs to another project; don't stop other containers.
 - Chunking: one chunk per `##` section, `chunk_id = <doc_id>#<section>`, with the doc preamble repeated in every chunk.
 - Multi-tenant: docs live in `data/<tenant>/docs/*.md`, and every chunk row stores `tenant_id`. The demo tenant is `komorebi-seitai-demo`.
@@ -22,6 +23,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 | Path | What |
 |---|---|
 | `src/chunking.py`, `src/ingest.py` | split docs → embed → upsert (re-runnable, removes stale chunks) |
+| `src/retrieval.py`, `src/lexical.py` | retrieval modes + RRF; tokenizer + BM25 |
 | `src/answer.py`, `src/prompts.py`, `src/llm.py` | retrieval + LLM call, the Japanese system prompt + JSON schema, providers |
 | `src/eval.py`, `src/metrics.py`, `src/compare.py` | eval runner, pure metric functions, run-vs-run diff |
 | `data/<tenant>/docs/` | clinic docs (source of truth for answers) |
@@ -34,7 +36,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 ## Commands
 ```
 python -m src.ingest --tenant komorebi-seitai-demo
-python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--limit 5]
+python -m src.eval --name <name> [--questions eval/questions_m2_heldout.jsonl] [--retrieval dense|hybrid] [--limit 5]
 python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]
 pytest

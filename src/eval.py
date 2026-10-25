@@ -1,7 +1,7 @@
 """Run the eval set, save per-question results and print metrics.
 
-Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--limit N] [--tenant ...]
-                          [--today 2026-10-24]
+Usage: python -m src.eval --name baseline [--questions eval/questions.jsonl] [--retrieval dense|hybrid]
+                          [--limit N] [--tenant ...] [--today 2026-10-24]
 Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
 """
 
@@ -17,10 +17,10 @@ from typing import Any
 from src import db
 from src.answer import answer_question
 from src.config import DEFAULT_TENANT, EVAL_DIR, MAX_TOKENS, ROOT_DIR, TOP_K, get_settings
-from src.embeddings import embed_one
 from src.llm import get_provider
 from src.metrics import Row, forbidden_phrases, summarize
 from src.prompts import prompt_hash
+from src.retrieval import RETRIEVAL_MODES, retrieval_config, warm_up
 
 # USD per million tokens (prompts <= 100K tokens).
 # Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-24).
@@ -80,12 +80,16 @@ def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> f
 
 
 def run_eval(
-    name: str, tenant_id: str, today: str, limit: int | None, questions_path: Path = DEFAULT_QUESTIONS
+    name: str,
+    tenant_id: str,
+    today: str,
+    limit: int | None,
+    questions_path: Path = DEFAULT_QUESTIONS,
+    retrieval: str = "dense",
 ) -> tuple[Path, list[Row]]:
     questions = load_questions(questions_path, limit)
     provenance = git_provenance()  # before writing any output
     provider = get_provider()
-    embed_one("warm-up")  # load bge-m3 now so model loading isn't counted in q01's latency
     p_hash = prompt_hash()
     runs_dir = EVAL_DIR / "runs"
     runs_dir.mkdir(parents=True, exist_ok=True)
@@ -93,8 +97,9 @@ def run_eval(
 
     rows: list[Row] = []
     with db.connect() as conn, out_path.open("w", encoding="utf-8") as out:
+        warm_up(conn, tenant_id, retrieval)  # so model/index loading isn't counted in q01's latency
         for i, q in enumerate(questions, 1):
-            res = answer_question(conn, provider, tenant_id, q["question"], today)
+            res = answer_question(conn, provider, tenant_id, q["question"], today, retrieval=retrieval)
             row: Row = {
                 "id": q["id"],
                 "category": q["category"],
@@ -108,6 +113,8 @@ def run_eval(
                 "retrieved_chunk_ids": res.retrieved_chunk_ids,
                 "retrieved_doc_ids": res.retrieved_doc_ids,
                 "retrieval_scores": [r["score"] for r in res.retrieved],
+                "retrieval_ranks": [{"dense": r["dense_rank"], "keyword": r["keyword_rank"]} for r in res.retrieved],
+                "candidate_chunk_ids": res.candidate_chunk_ids,
                 "answer": res.answer,
                 "behavior": res.behavior,
                 "sources": res.sources,
@@ -133,6 +140,7 @@ def run_eval(
         "model": provider.model_id,
         "embed_model": get_settings().embed_model,
         "top_k": TOP_K,
+        **retrieval_config(retrieval),
         "max_tokens": MAX_TOKENS,
         "today": today,
         "questions_file": questions_file_label(questions_path),
@@ -200,7 +208,8 @@ def _pct(value: float | None) -> str:
 def print_report(summary: dict[str, Any]) -> None:
     m = summary["metrics"]
     print(f"\n=== {summary['run']} ({summary['config']['model']}) ===")
-    print(f"questions: {summary['config'].get('questions_file', 'eval/questions.jsonl')}")
+    config = summary["config"]
+    print(f"questions: {config.get('questions_file', 'eval/questions.jsonl')}  retrieval: {config.get('retrieval', 'dense')}")
     print(f"doc recall@{TOP_K}: {_pct(m['retrieval']['recall'])}  hit@{TOP_K}: {_pct(m['retrieval']['hit'])}"
           f"  (n={m['retrieval']['n']} questions with sources)")
     s = m.get("section_retrieval")
@@ -243,6 +252,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--name", help="short label for this run, e.g. baseline")
     parser.add_argument("--questions", type=Path, default=DEFAULT_QUESTIONS,
                         help="question set to run (default: eval/questions.jsonl)")
+    parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
     parser.add_argument("--limit", type=int, default=None)
@@ -259,7 +269,7 @@ def main() -> None:
     elif args.name:
         if not args.questions.is_file():
             parser.error(f"questions file not found: {args.questions}")
-        run_eval(args.name, args.tenant, args.today, args.limit, args.questions)
+        run_eval(args.name, args.tenant, args.today, args.limit, args.questions, args.retrieval)
     else:
         parser.error("pass --name to run the eval, or --resummarize RUN_JSONL")
 

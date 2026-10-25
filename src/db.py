@@ -44,6 +44,16 @@ ORDER BY embedding <=> %(q)s
 LIMIT %(k)s;
 """
 
+ALL_CHUNKS_SQL = """
+SELECT chunk_id, doc_id, section, text, 0.0 AS score
+FROM chunks
+WHERE tenant_id = %s
+ORDER BY chunk_id;
+"""
+
+# Changes whenever a re-ingest adds, removes or rewrites a chunk; used to invalidate in-memory indexes.
+FINGERPRINT_SQL = "SELECT count(*), max(updated_at) FROM chunks WHERE tenant_id = %s;"
+
 
 @dataclass(frozen=True)
 class RetrievedChunk:
@@ -89,3 +99,13 @@ def search(
 ) -> list[RetrievedChunk]:
     rows = conn.execute(SEARCH_SQL, {"q": query_vec, "tenant": tenant_id, "k": k}).fetchall()
     return [RetrievedChunk(*row[:4], score=float(row[4])) for row in rows]
+
+
+def all_chunks(conn: psycopg.Connection, tenant_id: str) -> list[RetrievedChunk]:
+    """Every chunk of a tenant (score 0.0), ordered by chunk_id; for in-memory keyword indexes."""
+    rows = conn.execute(ALL_CHUNKS_SQL, (tenant_id,)).fetchall()
+    return [RetrievedChunk(*row[:4], score=float(row[4])) for row in rows]
+
+
+def chunks_fingerprint(conn: psycopg.Connection, tenant_id: str) -> tuple[object, ...]:
+    return tuple(conn.execute(FINGERPRINT_SQL, (tenant_id,)).fetchone())

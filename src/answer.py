@@ -1,6 +1,7 @@
-"""Answer one customer question: dense retrieval (top-k) + LLM with structured JSON output.
+"""Answer one customer question: retrieval (top-k) + LLM with structured JSON output.
 
 Usage: python -m src.answer "60分の全身整体はいくらですか？" [--tenant ...] [--today 2026-10-24]
+                            [--retrieval dense|hybrid]
 """
 
 from __future__ import annotations
@@ -16,9 +17,9 @@ import psycopg
 
 from src import db
 from src.config import DEFAULT_TENANT, MAX_TOKENS, TOP_K
-from src.embeddings import embed_one
 from src.llm import LLMProvider, get_provider
 from src.prompts import ANSWER_SCHEMA, SYSTEM_PROMPT, build_user_message
+from src.retrieval import RETRIEVAL_MODES, retrieve
 
 # Shown to the customer whenever the pipeline fails; staff takes over.
 FALLBACK_ANSWER = "申し訳ございません。ただいま確認いたしますので、スタッフからご連絡いたします。"
@@ -29,13 +30,14 @@ class AnswerResult:
     answer: str
     behavior: str
     sources: list[str]
-    retrieved: list[dict[str, object]]  # [{chunk_id, doc_id, score}]
+    retrieved: list[dict[str, object]]  # [{chunk_id, doc_id, score, dense_rank, keyword_rank}]
     latency_ms: int
     llm_latency_ms: int
     input_tokens: int = 0
     output_tokens: int = 0
     stop_reason: str | None = None
     invalid_sources: list[str] = field(default_factory=list)
+    candidate_chunk_ids: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -61,10 +63,11 @@ def answer_question(
     question: str,
     today: str,
     k: int = TOP_K,
+    retrieval: str = "dense",
 ) -> AnswerResult:
     started = time.perf_counter()
-    chunks = db.search(conn, tenant_id, embed_one(question), k)
-    retrieved = [{"chunk_id": c.chunk_id, "doc_id": c.doc_id, "score": round(c.score, 4)} for c in chunks]
+    found = retrieve(conn, tenant_id, question, retrieval, k)
+    chunks = found.chunks
 
     llm_started = time.perf_counter()
     error: str | None = None
@@ -78,8 +81,8 @@ def answer_question(
     total_ms = int((time.perf_counter() - started) * 1000)
 
     base = AnswerResult(
-        answer=FALLBACK_ANSWER, behavior="handoff", sources=[], retrieved=retrieved,
-        latency_ms=total_ms, llm_latency_ms=llm_ms, error=error,
+        answer=FALLBACK_ANSWER, behavior="handoff", sources=[], retrieved=found.details,
+        latency_ms=total_ms, llm_latency_ms=llm_ms, candidate_chunk_ids=found.candidate_chunk_ids, error=error,
     )
     if result is None:
         return base
@@ -101,10 +104,13 @@ def main() -> None:
     parser.add_argument("question")
     parser.add_argument("--tenant", default=DEFAULT_TENANT)
     parser.add_argument("--today", default=date.today().isoformat())
+    parser.add_argument("--retrieval", choices=RETRIEVAL_MODES, default="dense")
     args = parser.parse_args()
 
     with db.connect() as conn:
-        result = answer_question(conn, get_provider(), args.tenant, args.question, args.today)
+        result = answer_question(
+            conn, get_provider(), args.tenant, args.question, args.today, retrieval=args.retrieval
+        )
     print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
 
 
