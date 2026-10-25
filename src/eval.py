@@ -21,15 +21,9 @@ from src.config import DEFAULT_TENANT, EVAL_DIR, MAX_TOKENS, ROOT_DIR, TOP_K, ge
 from src.doc_meta import meta_sha256
 from src.llm import get_provider
 from src.metrics import Row, aggregate_repeats, behavior_ok, forbidden_phrases, summarize
+from src.pricing import estimate_cost_usd
 from src.prompts import prompt_hash
 from src.retrieval import RETRIEVAL_MODES, load_small_docs, retrieval_config, warm_up
-
-# USD per million tokens (prompts <= 100K tokens).
-# Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-24).
-PRICING_PER_MTOK: dict[str, tuple[float, float]] = {
-    "claude-haiku-5-5": (0.10, 0.50),
-    "claude-haiku-4-5": (1.00, 5.00),
-}
 
 # The dataset's notices are written relative to late October 2026; pin "today" for reproducibility.
 DEFAULT_EVAL_TODAY = "2026-10-24"
@@ -72,13 +66,6 @@ def git_provenance() -> dict[str, Any]:
     commit = _git("rev-parse", "HEAD")
     status = _git("status", "--porcelain", "--", ".", ":(exclude)eval/runs") if commit else None
     return {"git_commit": commit, "git_dirty": bool(status) if commit else None}
-
-
-def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> float | None:
-    prices = next((p for name, p in PRICING_PER_MTOK.items() if name in model_id), None)
-    if prices is None:
-        return None
-    return (input_tokens * prices[0] + output_tokens * prices[1]) / 1_000_000
 
 
 def run_eval(
