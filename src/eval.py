@@ -49,8 +49,9 @@ def _git(*args: str) -> str | None:
 
 
 def git_provenance() -> dict[str, Any]:
+    """Commit + dirty flag for the code. Run outputs under eval/runs/ don't count as dirty."""
     commit = _git("rev-parse", "HEAD")
-    status = _git("status", "--porcelain") if commit else None
+    status = _git("status", "--porcelain", "--", ".", ":(exclude)eval/runs") if commit else None
     return {"git_commit": commit, "git_dirty": bool(status) if commit else None}
 
 
@@ -63,6 +64,7 @@ def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> f
 
 def run_eval(name: str, tenant_id: str, today: str, limit: int | None) -> tuple[Path, list[Row]]:
     questions = load_questions(EVAL_DIR / "questions.jsonl", limit)
+    provenance = git_provenance()  # before writing any output
     provider = get_provider()
     embed_one("warm-up")  # load bge-m3 now so model loading isn't counted in q01's latency
     p_hash = prompt_hash()
@@ -114,7 +116,7 @@ def run_eval(name: str, tenant_id: str, today: str, limit: int | None) -> tuple[
         "max_tokens": MAX_TOKENS,
         "today": today,
         "system_prompt_sha256": p_hash,
-        **git_provenance(),
+        **provenance,
     }
     print_report(write_summary(out_path, config, rows))
     return out_path, rows
