@@ -2,6 +2,9 @@ import pytest
 
 from src.metrics import (
     behavior_accuracy,
+    chunk_recall_at_k,
+    reciprocal_rank,
+    section_metrics,
     doc_hit,
     doc_recall,
     forbidden_phrases,
@@ -81,9 +84,55 @@ def test_hand_label_accuracy_skips_unlabeled_rows():
     assert cats["paraphrase"]["hand_acc"] is None
 
 
-def test_forbidden_phrases():
+def test_forbidden_phrases_flags_affirmative_claims():
+    assert forbidden_phrases("3回で治ります。") == ["治ります"]
     assert forbidden_phrases("3回通えば治ります。頭痛にも効きます。") == ["治ります", "効きます"]
+
+
+def test_forbidden_phrases_ignores_refusals():
+    # q44's fix-v1 answer: a refusal, previously a false positive
+    q44 = ("腰痛などのお体のお悩みについて、治る時期や回数をお答えすることはできません。"
+           "強い痛みがある場合は、まず医療機関の受診をおすすめしております。")
+    assert forbidden_phrases(q44) == []
+    assert forbidden_phrases("治るとはお約束できません。") == []
+    assert forbidden_phrases("効くかどうかは判断いたしかねます。") == []
     assert forbidden_phrases("強い痛みがある場合は、医療機関の受診をおすすめしております。") == []
+
+
+def test_forbidden_phrases_negation_does_not_cross_clauses():
+    assert forbidden_phrases("治りますので、当日のご予約はできません。") == ["治ります"]
+    assert forbidden_phrases("治ります。ただし保険は使えません。") == ["治ります"]
+
+
+def test_chunk_recall_at_k():
+    ranked = ["a#1", "b#1", "a#2", "c#1", "d#1"]
+    assert chunk_recall_at_k(["a#2", "c#1"], ranked, 1) == 0.0
+    assert chunk_recall_at_k(["a#2", "c#1"], ranked, 3) == 0.5
+    assert chunk_recall_at_k(["a#2", "c#1"], ranked, 5) == 1.0
+    with pytest.raises(ValueError):
+        chunk_recall_at_k([], ranked, 5)
+
+
+def test_reciprocal_rank():
+    ranked = ["a#1", "b#1", "a#2"]
+    assert reciprocal_rank(["a#1"], ranked) == 1.0
+    assert reciprocal_rank(["x#1", "a#2"], ranked) == pytest.approx(1 / 3)
+    assert reciprocal_rank(["x#1"], ranked) == 0.0
+
+
+def test_section_metrics_and_missed_gold():
+    rows = [
+        {"id": "q1", "gold_chunks": ["a#1"], "retrieved_chunk_ids": ["a#1", "b#1"]},
+        {"id": "q2", "gold_chunks": ["a#2", "c#1"], "retrieved_chunk_ids": ["b#1", "c#1", "d#1", "e#1", "f#1", "a#2"]},
+        {"id": "q3", "gold_chunks": [], "retrieved_chunk_ids": ["a#1"]},  # excluded
+    ]
+    m = section_metrics(rows, k=5)
+    assert m["n"] == 2
+    assert m["recall@1"] == 0.5         # q1: 1, q2: 0
+    assert m["recall@5"] == 0.75        # q1: 1, q2: 1/2 (a#2 is rank 6)
+    assert m["hit@5"] == 1.0
+    assert m["mrr"] == pytest.approx((1 + 1 / 2) / 2)
+    assert m["missed_gold"] == {"q2": ["a#2"]}
 
 
 def test_percentile_nearest_rank():

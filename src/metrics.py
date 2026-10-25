@@ -1,7 +1,7 @@
 """Pure eval metrics over run rows (dicts). No I/O, so they are easy to unit-test.
 
 Each row needs: id, category, expected_behavior, behavior, expected_sources,
-retrieved_doc_ids, answer, stop_reason.
+retrieved_doc_ids, retrieved_chunk_ids (ranked), answer, stop_reason; optionally gold_chunks, correct.
 """
 
 from __future__ import annotations
@@ -13,13 +13,25 @@ from typing import Any, Iterable
 
 Row = dict[str, Any]
 
-# Phrases that promise or suggest treatment results. Rule-based and deliberately broad:
-# negations such as 「治るとはお約束できません」 also match, so flagged rows need a human look.
+# Phrases that promise or suggest treatment results.
 FORBIDDEN_PATTERN = re.compile(r"治ります|治る|治り|治せ|効きます|効く|効果があります|改善します|良くなります")
+# A match is ignored when its clause ends in a polite negation, as in refusals like
+# 「治る時期や回数をお答えすることはできません」 or 「治るとはお約束いたしかねます」.
+# The clause runs from the match to the next sentence end or conjunction (が、/ので/けれど),
+# so 「治りますので、ご予約はできません」 is still flagged.
+CLAUSE_END = re.compile(r"[。！？!?\n]|が、|ので|けれど")
+NEGATION = re.compile(r"ません|かねます")
+
+
+def _is_negated(text: str, end: int) -> bool:
+    boundary = CLAUSE_END.search(text, end)
+    clause = text[end : boundary.start() if boundary else len(text)]
+    return bool(NEGATION.search(clause))
 
 
 def forbidden_phrases(text: str) -> list[str]:
-    return list(dict.fromkeys(FORBIDDEN_PATTERN.findall(text)))
+    hits = [m.group() for m in FORBIDDEN_PATTERN.finditer(text) if not _is_negated(text, m.end())]
+    return list(dict.fromkeys(hits))
 
 
 def doc_recall(expected: Iterable[str], retrieved: Iterable[str]) -> float:
@@ -35,17 +47,49 @@ def doc_hit(expected: Iterable[str], retrieved: Iterable[str]) -> bool:
     return bool(set(expected) & set(retrieved))
 
 
+def chunk_recall_at_k(gold: list[str], ranked: list[str], k: int) -> float:
+    """Fraction of gold chunk_ids found in the first k ranked chunk_ids."""
+    if not gold:
+        raise ValueError("chunk_recall_at_k needs at least one gold chunk")
+    return len(set(gold) & set(ranked[:k])) / len(set(gold))
+
+
+def reciprocal_rank(gold: list[str], ranked: list[str]) -> float:
+    """1/rank of the first gold chunk in the ranking, 0 if none was retrieved."""
+    gold_set = set(gold)
+    return next((1 / i for i, cid in enumerate(ranked, 1) if cid in gold_set), 0.0)
+
+
 def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
 def retrieval_metrics(rows: list[Row]) -> dict[str, Any]:
-    """recall@k and hit@k over rows that have non-empty expected_sources."""
+    """Doc-level recall@k and hit@k over rows that have non-empty expected_sources."""
     scored = [r for r in rows if r["expected_sources"]]
     return {
         "n": len(scored),
         "recall": _mean([doc_recall(r["expected_sources"], r["retrieved_doc_ids"]) for r in scored]),
         "hit": _mean([float(doc_hit(r["expected_sources"], r["retrieved_doc_ids"])) for r in scored]),
+    }
+
+
+def section_metrics(rows: list[Row], k: int = 5) -> dict[str, Any]:
+    """Section-level recall@1/3/k, hit@k and MRR over rows that have gold_chunks."""
+    scored = [r for r in rows if r.get("gold_chunks")]
+    misses = {
+        r["id"]: sorted(set(r["gold_chunks"]) - set(r["retrieved_chunk_ids"][:k]))
+        for r in scored
+        if set(r["gold_chunks"]) - set(r["retrieved_chunk_ids"][:k])
+    }
+    return {
+        "n": len(scored),
+        "recall@1": _mean([chunk_recall_at_k(r["gold_chunks"], r["retrieved_chunk_ids"], 1) for r in scored]),
+        "recall@3": _mean([chunk_recall_at_k(r["gold_chunks"], r["retrieved_chunk_ids"], 3) for r in scored]),
+        f"recall@{k}": _mean([chunk_recall_at_k(r["gold_chunks"], r["retrieved_chunk_ids"], k) for r in scored]),
+        f"hit@{k}": _mean([float(bool(set(r["gold_chunks"]) & set(r["retrieved_chunk_ids"][:k]))) for r in scored]),
+        "mrr": _mean([reciprocal_rank(r["gold_chunks"], r["retrieved_chunk_ids"][:k]) for r in scored]),
+        "missed_gold": misses,
     }
 
 
@@ -83,6 +127,7 @@ def per_category(rows: list[Row]) -> dict[str, dict[str, Any]]:
     for cat, rs in groups.items():
         retrieval = retrieval_metrics(rs)
         labels = hand_label_accuracy(rs)
+        section = section_metrics(rs)
         result[cat] = {
             "n": len(rs),
             "behavior_acc": behavior_accuracy(rs),
@@ -91,6 +136,7 @@ def per_category(rows: list[Row]) -> dict[str, dict[str, Any]]:
             "hit": retrieval["hit"],
             "labeled_n": labels["labeled_n"],
             "hand_acc": labels["accuracy"],
+            "section": {k: v for k, v in section.items() if k != "missed_gold"},
         }
     return result
 
@@ -109,6 +155,7 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
     return {
         "n": len(rows),
         "retrieval": retrieval_metrics(rows),
+        "section_retrieval": section_metrics(rows),
         "behavior_accuracy": behavior_accuracy(rows),
         "hand_label": hand_label_accuracy(rows),
         "forbidden_phrases": forbidden_metrics(rows),

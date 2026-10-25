@@ -81,6 +81,7 @@ def run_eval(name: str, tenant_id: str, today: str, limit: int | None) -> tuple[
                 "expected_behavior": q["expected_behavior"],
                 "expected_answer": q["expected_answer"],
                 "expected_sources": q["sources"],
+                "gold_chunks": q.get("gold_chunks", []),
                 "trap": q.get("trap"),
                 "retrieved_chunk_ids": res.retrieved_chunk_ids,
                 "retrieved_doc_ids": res.retrieved_doc_ids,
@@ -150,8 +151,14 @@ def _pct(value: float | None) -> str:
 def print_report(summary: dict[str, Any]) -> None:
     m = summary["metrics"]
     print(f"\n=== {summary['run']} ({summary['config']['model']}) ===")
-    print(f"recall@{TOP_K}: {_pct(m['retrieval']['recall'])}  hit@{TOP_K}: {_pct(m['retrieval']['hit'])}"
+    print(f"doc recall@{TOP_K}: {_pct(m['retrieval']['recall'])}  hit@{TOP_K}: {_pct(m['retrieval']['hit'])}"
           f"  (n={m['retrieval']['n']} questions with sources)")
+    s = m.get("section_retrieval")
+    if s and s["n"]:
+        print(f"section recall@1 {_pct(s['recall@1'])}  @3 {_pct(s['recall@3'])}  @{TOP_K} {_pct(s[f'recall@{TOP_K}'])}"
+              f"  hit@{TOP_K} {_pct(s[f'hit@{TOP_K}'])}  MRR {s['mrr']:.3f}  (n={s['n']} with gold_chunks)")
+        for qid, missing in s["missed_gold"].items():
+            print(f"  gold chunk not in top-{TOP_K}: {qid} {missing}")
     print(f"behavior accuracy: {_pct(m['behavior_accuracy'])}  (n={m['n']})")
     hl = m["hand_label"]
     print(f"hand-label accuracy: {_pct(hl['accuracy'])}  (labeled {hl['labeled_n']}/{m['n']})"
@@ -164,10 +171,15 @@ def print_report(summary: dict[str, Any]) -> None:
     cost_str = "n/a" if cost is None else f"${cost:.4f}"
     print(f"latency mean {lat['mean']:.0f}ms p95 {lat['p95']:.0f}ms | tokens in {m['tokens']['input']}"
           f" out {m['tokens']['output']} | est. cost {cost_str}")
-    print(f"\n{'category':<16}{'n':>4}{'behavior':>10}{'hand':>9}{'recall':>9}{'hit':>9}")
+    print(f"\n{'category':<16}{'n':>4}{'behavior':>10}{'hand':>9}{'doc_rec':>9}{'doc_hit':>9}"
+          f"{'sec_r@1':>9}{'sec_r@3':>9}{'sec_r@5':>9}{'sec_hit':>9}{'MRR':>7}")
     for cat, c in m["per_category"].items():
+        sec = c.get("section", {})
+        mrr = sec.get("mrr")
         print(f"{cat:<16}{c['n']:>4}{_pct(c['behavior_acc']):>10}{_pct(c['hand_acc']):>9}"
-              f"{_pct(c['recall']):>9}{_pct(c['hit']):>9}")
+              f"{_pct(c['recall']):>9}{_pct(c['hit']):>9}{_pct(sec.get('recall@1')):>9}"
+              f"{_pct(sec.get('recall@3')):>9}{_pct(sec.get(f'recall@{TOP_K}')):>9}"
+              f"{_pct(sec.get(f'hit@{TOP_K}')):>9}{'  n/a' if mrr is None else f'{mrr:.3f}':>7}")
 
 
 def main() -> None:

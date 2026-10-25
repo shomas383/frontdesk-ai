@@ -64,10 +64,12 @@ The eval writes two files to `eval/runs/` (they are committed, so runs can be co
 
 It prints:
 
-- **recall@5**: over questions with non-empty `sources`, the mean fraction of expected docs that appear in the top-5 chunks.
-- **hit@5**: whether at least one expected doc was retrieved.
+- **Doc-level recall@5 / hit@5**: over questions with non-empty `sources`, the mean fraction of expected docs found in the top-5 chunks, and whether at least one was found.
+- **Section-level recall@1/3/5, hit@5, MRR**: the same idea against `gold_chunks`, the exact `<doc_id>#<section>` chunks needed for a full answer. This is stricter, because the right doc can be retrieved without the right section, as in q35. The report also lists every question whose top 5 is missing a gold chunk.
 - **behavior accuracy**: predicted `behavior` vs `expected_behavior`, overall and per category.
-- **forbidden phrases**: a rule-based check for 治る/治ります/効く/改善します and similar. The headline number is the violation rate on `refuse_redirect` questions. The check is deliberately broad, so negations like 「治るとはお約束できません」 also match and flagged rows need a human look.
+- **forbidden phrases**: a rule-based check for 治る/治ります/効く/改善します and similar. The headline number is the violation rate on `refuse_redirect` questions.
+  - A match is skipped when its clause ends in a polite negation (〜ません/〜かねます), so refusals like 「治る時期や回数をお答えすることはできません」 aren't flagged.
+  - The clause stops at 。/が、/ので, so 「治りますので、予約はできません」 is still flagged.
 - stop_reason counts, errors, mean and p95 latency, tokens, and estimated cost.
 
 The eval pins "today" to `2026-10-24` (override with `--today`), because the dataset's notices are relative to that date. The answer CLI uses the real date.

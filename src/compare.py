@@ -14,38 +14,46 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.eval import load_rows, resummarize, summary_path
+from src.config import EVAL_DIR
+from src.eval import load_questions, load_rows, resummarize, summary_path
 from src.metrics import Row, summarize
 
 LABEL_FIELDS = ("correct", "label_note")
 
 
-def _fmt(value: float | None, pct: bool = True) -> str:
+# Value kinds: "pct" (0-1 shown as %), "ratio" (0-1 shown as 0.000), "num" (counts, ms).
+def _fmt(value: float | None, kind: str = "pct") -> str:
     if value is None:
         return "n/a"
-    return f"{value * 100:.1f}%" if pct else f"{value:.0f}"
+    return {"pct": f"{value * 100:.1f}%", "ratio": f"{value:.3f}", "num": f"{value:.0f}"}[kind]
 
 
-def _delta(a: float | None, b: float | None, pct: bool = True) -> str:
+def _delta(a: float | None, b: float | None, kind: str = "pct") -> str:
     if a is None or b is None:
         return ""
-    d = (b - a) * (100 if pct else 1)
-    return f"{d:+.1f}{'pt' if pct else ''}"
+    d = b - a
+    return {"pct": f"{d * 100:+.1f}pt", "ratio": f"{d:+.3f}", "num": f"{d:+.0f}"}[kind]
 
 
-def metric_lines(base: dict[str, Any], new: dict[str, Any]) -> list[tuple[str, float | None, float | None, bool]]:
+def metric_lines(base: dict[str, Any], new: dict[str, Any]) -> list[tuple[str, float | None, float | None, str]]:
+    bs, ns = base["section_retrieval"], new["section_retrieval"]
     lines = [
-        ("recall@k", base["retrieval"]["recall"], new["retrieval"]["recall"], True),
-        ("hit@k", base["retrieval"]["hit"], new["retrieval"]["hit"], True),
-        ("behavior accuracy", base["behavior_accuracy"], new["behavior_accuracy"], True),
-        ("hand-label accuracy", base["hand_label"]["accuracy"], new["hand_label"]["accuracy"], True),
+        ("doc recall@k", base["retrieval"]["recall"], new["retrieval"]["recall"], "pct"),
+        ("doc hit@k", base["retrieval"]["hit"], new["retrieval"]["hit"], "pct"),
+        ("section recall@1", bs["recall@1"], ns["recall@1"], "pct"),
+        ("section recall@3", bs["recall@3"], ns["recall@3"], "pct"),
+        ("section recall@5", bs["recall@5"], ns["recall@5"], "pct"),
+        ("section hit@5", bs["hit@5"], ns["hit@5"], "pct"),
+        ("section MRR", bs["mrr"], ns["mrr"], "ratio"),
+        ("behavior accuracy", base["behavior_accuracy"], new["behavior_accuracy"], "pct"),
+        ("hand-label accuracy", base["hand_label"]["accuracy"], new["hand_label"]["accuracy"], "pct"),
         ("forbidden (refuse_redirect)", base["forbidden_phrases"]["refuse_redirect_violation_rate"],
-         new["forbidden_phrases"]["refuse_redirect_violation_rate"], True),
-        ("latency mean ms", base["latency_ms"]["mean"], new["latency_ms"]["mean"], False),
-        ("input tokens", base["tokens"]["input"], new["tokens"]["input"], False),
+         new["forbidden_phrases"]["refuse_redirect_violation_rate"], "pct"),
+        ("latency mean ms", base["latency_ms"]["mean"], new["latency_ms"]["mean"], "num"),
+        ("input tokens", base["tokens"]["input"], new["tokens"]["input"], "num"),
     ]
     for cat, c in base["per_category"].items():
-        lines.append((f"  {cat} behavior", c["behavior_acc"], new["per_category"].get(cat, {}).get("behavior_acc"), True))
+        lines.append((f"  {cat} behavior", c["behavior_acc"], new["per_category"].get(cat, {}).get("behavior_acc"), "pct"))
     return lines
 
 
@@ -108,8 +116,16 @@ def write_markdown(path: Path, base_name: str, new_name: str, diffs: list[dict[s
     path.write_text("\n".join(out), encoding="utf-8")
 
 
+def fill_gold_chunks(rows: list[Row]) -> None:
+    """Older runs predate gold_chunks; add them from the current question set (in memory only)."""
+    gold = {q["id"]: q.get("gold_chunks", []) for q in load_questions(EVAL_DIR / "questions.jsonl", None)}
+    for row in rows:
+        row.setdefault("gold_chunks", gold.get(row["id"], []))
+
+
 def compare(base_path: Path, new_path: Path, carry: bool) -> None:
     base_rows, new_rows = load_rows(base_path), load_rows(new_path)
+    fill_gold_chunks(base_rows)
     diffs = question_diffs(base_rows, new_rows)
     if carry:
         n = carry_labels(diffs)
@@ -119,8 +135,8 @@ def compare(base_path: Path, new_path: Path, carry: bool) -> None:
 
     base_m, new_m = summarize(base_rows), summarize(new_rows)
     print(f"\n{'metric':<30}{base_path.stem[:22]:>24}{new_path.stem[:22]:>24}{'delta':>10}")
-    for name, a, b, pct in metric_lines(base_m, new_m):
-        print(f"{name:<30}{_fmt(a, pct):>24}{_fmt(b, pct):>24}{_delta(a, b, pct):>10}")
+    for name, a, b, kind in metric_lines(base_m, new_m):
+        print(f"{name:<30}{_fmt(a, kind):>24}{_fmt(b, kind):>24}{_delta(a, b, kind):>10}")
     print(f"\nlabeled: base {base_m['hand_label']['labeled_n']}/{base_m['n']}, "
           f"new {new_m['hand_label']['labeled_n']}/{new_m['n']}")
 
