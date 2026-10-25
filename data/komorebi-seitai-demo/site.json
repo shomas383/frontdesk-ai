@@ -1,0 +1,16 @@
+{
+  "clinic_name": "こもれび整体院",
+  "doc_labels": {
+    "01_menu_prices": "料金・メニュー",
+    "02_hours": "営業時間・定休日",
+    "03_access": "アクセス・駐車場",
+    "04_first_visit": "初めての方へ",
+    "05_booking_cancellation": "ご予約・キャンセル",
+    "06_faq": "よくある質問",
+    "07_news": "お知らせ",
+    "08_blog_katakori": "ブログ（肩こり）",
+    "09_staff": "スタッフ紹介",
+    "10_campaign_2025": "過去のキャンペーン（終了）",
+    "11_column_aftercare": "コラム（アフターケア）"
+  }
+}

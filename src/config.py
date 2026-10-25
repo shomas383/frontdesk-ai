@@ -54,6 +54,10 @@ def _int_env(name: str, default: int) -> int:
     return int(value) if value else default
 
 
+def _bool_env(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes")
+
+
 def _list_env(name: str, default: str = "") -> tuple[str, ...]:
     return tuple(v.strip() for v in os.getenv(name, default).split(",") if v.strip())
 
@@ -71,6 +75,7 @@ class AppSettings:
     app_today: str = ""  # empty: the real date in Asia/Tokyo; set (e.g. 2026-10-24) to pin it like eval
     trust_proxy_headers: bool = False  # use X-Forwarded-For (only behind a trusted proxy/load balancer)
     cors_origins: tuple[str, ...] = ()
+    demo_autosend: bool = False  # let the web page auto-send ?demo=q1|q2 (screenshots / demo video only)
 
 
 def get_app_settings() -> AppSettings:
@@ -83,6 +88,7 @@ def get_app_settings() -> AppSettings:
         daily_question_cap=_int_env("DAILY_QUESTION_CAP", 500),
         daily_token_budget=_int_env("DAILY_TOKEN_BUDGET", 2_000_000),
         app_today=os.getenv("APP_TODAY", "").strip(),
-        trust_proxy_headers=os.getenv("TRUST_PROXY_HEADERS", "").strip().lower() in ("1", "true", "yes"),
+        trust_proxy_headers=_bool_env("TRUST_PROXY_HEADERS"),
         cors_origins=_list_env("CORS_ORIGINS"),
+        demo_autosend=_bool_env("DEMO_AUTOSEND"),
     )

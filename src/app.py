@@ -5,6 +5,7 @@ Single worker only: the per-IP rate limiter is in process memory (see src/limits
 The access log is off because it prints client IPs; each request is logged as one JSON line instead.
 
 POST /chat {tenant, message} -> {answer, behavior, sources};  GET /health
+GET / serves the web chat (src/static/); GET /api/config gives it the tenant, labels and limits.
 """
 
 from __future__ import annotations
@@ -16,16 +17,18 @@ import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager, asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src import db
 from src.answer import FALLBACK_ANSWER, answer_question
-from src.config import AppSettings, get_app_settings
+from src.config import DATA_DIR, AppSettings, get_app_settings
 from src.limits import RateLimiter, now_jst
 from src.llm import LLMProvider, get_provider
 from src.pricing import estimate_cost_usd
@@ -43,6 +46,15 @@ RATE_LIMITED_DETAIL = "ただいまご質問が集中しております。恐れ
 EMPTY_MESSAGE_DETAIL = "ご質問を入力してください。"
 
 request_log = logging.getLogger("frontdesk.requests")
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+# Everything the page needs is same-origin and none of it is inline, so the CSP can be strict.
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; "
+                               "base-uri 'none'; form-action 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+}
 
 
 class ChatRequest(BaseModel):
@@ -63,6 +75,13 @@ def _setup_logging() -> None:
         handler.setFormatter(logging.Formatter("%(message)s"))
         request_log.addHandler(handler)
         request_log.setLevel(logging.INFO)
+
+
+def load_site(tenant_id: str) -> dict[str, Any]:
+    """Display info for the web page (data/<tenant>/site.json): clinic_name and doc_id -> label."""
+    path = DATA_DIR / tenant_id / "site.json"
+    site = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    return {"clinic_name": site.get("clinic_name", tenant_id), "doc_labels": site.get("doc_labels", {})}
 
 
 def log_event(**fields: Any) -> None:
@@ -103,6 +122,25 @@ def create_app(
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=list(settings.cors_origins),
                            allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        return response
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/api/config")
+    def page_config() -> dict[str, Any]:
+        """What the web page needs; the page serves the first allowed tenant."""
+        tenant = settings.allowed_tenants[0]
+        return {"tenant": tenant, **load_site(tenant), "max_message_chars": settings.max_message_chars,
+                "demo_autosend": settings.demo_autosend}
 
     def client_ip(request: Request) -> str:
         if settings.trust_proxy_headers:
