@@ -1,0 +1,161 @@
+{
+  "name": "m2-smalldocs",
+  "runs": [
+    "20261025-042652_m2-smalldocs-r1.jsonl",
+    "20261025-042719_m2-smalldocs-r2.jsonl",
+    "20261025-042747_m2-smalldocs-r3.jsonl"
+  ],
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "dense",
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions_m2_heldout.jsonl",
+    "system_prompt_sha256": "07d9753c80eb",
+    "doc_meta": false,
+    "guardrail": true,
+    "small_docs": [
+      "01_menu_prices"
+    ],
+    "git_commit": "08d05c470e8c09d494ca92eeeff0f097a898a9d7",
+    "git_dirty": false,
+    "repeat": 1,
+    "repeats": 3
+  },
+  "aggregate": {
+    "repeats": 3,
+    "behavior_accuracy": {
+      "mean": 0.9833333333333334,
+      "min": 0.95,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        0.95
+      ]
+    },
+    "hand_label_accuracy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "labeled": [
+      20,
+      20,
+      20
+    ],
+    "refuse_redirect_violation_rate": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "latency_mean_ms": {
+      "mean": 1369.7833333333335,
+      "min": 1357.3,
+      "max": 1386.05,
+      "values": [
+        1386.05,
+        1357.3,
+        1366.0
+      ]
+    },
+    "input_tokens": {
+      "mean": 58038.0,
+      "min": 58038,
+      "max": 58038,
+      "values": [
+        58038,
+        58038,
+        58038
+      ]
+    },
+    "estimated_cost_usd": {
+      "mean": 0.006907466666666667,
+      "min": 0.0069048,
+      "max": 0.0069093,
+      "values": [
+        0.0069083,
+        0.0069048,
+        0.0069093
+      ]
+    },
+    "flips": [
+      {
+        "id": "q52",
+        "expected": [
+          "answer"
+        ],
+        "behaviors": [
+          "answer",
+          "answer",
+          "handoff"
+        ],
+        "behavior_ok": [
+          true,
+          true,
+          false
+        ],
+        "correct": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "q54",
+        "expected": [
+          "answer",
+          "handoff"
+        ],
+        "behaviors": [
+          "answer",
+          "handoff",
+          "answer"
+        ],
+        "behavior_ok": [
+          true,
+          true,
+          true
+        ],
+        "correct": [
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "context_recall": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "guardrail_fired": [
+      [
+        "q55"
+      ],
+      [
+        "q56"
+      ],
+      []
+    ]
+  }
+}

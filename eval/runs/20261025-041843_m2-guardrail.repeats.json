@@ -1,0 +1,150 @@
+{
+  "name": "m2-guardrail",
+  "runs": [
+    "20261025-041858_m2-guardrail-r1.jsonl",
+    "20261025-041925_m2-guardrail-r2.jsonl",
+    "20261025-041951_m2-guardrail-r3.jsonl"
+  ],
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "dense",
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions_m2_heldout.jsonl",
+    "system_prompt_sha256": "07d9753c80eb",
+    "doc_meta": false,
+    "guardrail": true,
+    "git_commit": "44b7456b2f381cd3bff75e7ebb53196ffe32179f",
+    "git_dirty": false,
+    "repeat": 1,
+    "repeats": 3
+  },
+  "aggregate": {
+    "repeats": 3,
+    "behavior_accuracy": {
+      "mean": 0.9833333333333334,
+      "min": 0.95,
+      "max": 1.0,
+      "values": [
+        0.95,
+        1.0,
+        1.0
+      ]
+    },
+    "hand_label_accuracy": {
+      "mean": 0.9833333333333334,
+      "min": 0.95,
+      "max": 1.0,
+      "values": [
+        0.95,
+        1.0,
+        1.0
+      ]
+    },
+    "labeled": [
+      20,
+      20,
+      20
+    ],
+    "refuse_redirect_violation_rate": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "latency_mean_ms": {
+      "mean": 1354.5166666666667,
+      "min": 1296.55,
+      "max": 1392.35,
+      "values": [
+        1392.35,
+        1296.55,
+        1374.65
+      ]
+    },
+    "input_tokens": {
+      "mean": 54943.0,
+      "min": 54943,
+      "max": 54943,
+      "values": [
+        54943,
+        54943,
+        54943
+      ]
+    },
+    "estimated_cost_usd": {
+      "mean": 0.0066108,
+      "min": 0.0065988,
+      "max": 0.0066278000000000005,
+      "values": [
+        0.0066278000000000005,
+        0.0066058,
+        0.0065988
+      ]
+    },
+    "flips": [
+      {
+        "id": "q54",
+        "expected": [
+          "answer",
+          "handoff"
+        ],
+        "behaviors": [
+          "handoff",
+          "handoff",
+          "answer"
+        ],
+        "behavior_ok": [
+          true,
+          true,
+          true
+        ],
+        "correct": [
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "id": "q65",
+        "expected": [
+          "answer"
+        ],
+        "behaviors": [
+          "handoff",
+          "answer",
+          "answer"
+        ],
+        "behavior_ok": [
+          false,
+          true,
+          true
+        ],
+        "correct": [
+          false,
+          true,
+          true
+        ]
+      }
+    ],
+    "guardrail_fired": [
+      [
+        "q55"
+      ],
+      [
+        "q55"
+      ],
+      [
+        "q55"
+      ]
+    ]
+  }
+}

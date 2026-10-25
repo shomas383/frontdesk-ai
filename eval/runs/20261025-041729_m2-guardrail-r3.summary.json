@@ -1,0 +1,161 @@
+{
+  "run": "20261025-041729_m2-guardrail-r3.jsonl",
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "dense",
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions.jsonl",
+    "system_prompt_sha256": "07d9753c80eb",
+    "doc_meta": false,
+    "guardrail": true,
+    "git_commit": "44b7456b2f381cd3bff75e7ebb53196ffe32179f",
+    "git_dirty": false,
+    "repeat": 3,
+    "repeats": 3
+  },
+  "metrics": {
+    "n": 50,
+    "retrieval": {
+      "n": 41,
+      "recall": 1.0,
+      "hit": 1.0
+    },
+    "section_retrieval": {
+      "n": 40,
+      "recall@1": 0.6125,
+      "recall@3": 0.9083333333333334,
+      "recall@5": 0.9791666666666666,
+      "hit@5": 1.0,
+      "mrr": 0.8270833333333334,
+      "missed_gold": {
+        "q27": [
+          "01_menu_prices#初回限定（LINE友だち登録の方）"
+        ],
+        "q35": [
+          "01_menu_prices#初検料"
+        ]
+      }
+    },
+    "behavior_accuracy": 1.0,
+    "hand_label": {
+      "labeled_n": 50,
+      "accuracy": 1.0,
+      "incorrect_ids": []
+    },
+    "forbidden_phrases": {
+      "refuse_redirect_n": 7,
+      "refuse_redirect_violation_rate": 0.0,
+      "all_flagged_count": 0,
+      "flagged_ids": []
+    },
+    "per_category": {
+      "direct": {
+        "n": 20,
+        "behavior_acc": 1.0,
+        "retrieval_n": 20,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 20,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 20,
+          "recall@1": 0.75,
+          "recall@3": 1.0,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 0.925
+        }
+      },
+      "paraphrase": {
+        "n": 10,
+        "behavior_acc": 1.0,
+        "retrieval_n": 10,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 10,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 10,
+          "recall@1": 0.5,
+          "recall@3": 0.95,
+          "recall@5": 0.95,
+          "hit@5": 1.0,
+          "mrr": 0.7666666666666667
+        }
+      },
+      "multi_doc": {
+        "n": 5,
+        "behavior_acc": 1.0,
+        "retrieval_n": 5,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 5,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 5,
+          "recall@1": 0.4,
+          "recall@3": 0.6666666666666667,
+          "recall@5": 0.9333333333333333,
+          "hit@5": 1.0,
+          "mrr": 0.6666666666666667
+        }
+      },
+      "out_of_scope": {
+        "n": 8,
+        "behavior_acc": 1.0,
+        "retrieval_n": 2,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 8,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 1,
+          "recall@1": 1.0,
+          "recall@3": 1.0,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 1.0
+        }
+      },
+      "symptom_refuse": {
+        "n": 7,
+        "behavior_acc": 1.0,
+        "retrieval_n": 4,
+        "recall": 1.0,
+        "hit": 1.0,
+        "labeled_n": 7,
+        "hand_acc": 1.0,
+        "section": {
+          "n": 4,
+          "recall@1": 0.375,
+          "recall@3": 0.625,
+          "recall@5": 1.0,
+          "hit@5": 1.0,
+          "mrr": 0.6458333333333334
+        }
+      }
+    },
+    "stop_reasons": {
+      "end_turn": 50
+    },
+    "errors": 0,
+    "latency_ms": {
+      "mean": 1387.3,
+      "p95": 2110.0
+    },
+    "tokens": {
+      "input": 137131,
+      "output": 5089
+    },
+    "guardrail": {
+      "fired": 0,
+      "fired_ids": []
+    },
+    "estimated_cost_usd": 0.0162576
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "name": "m2-smalldocs",
+  "runs": [
+    "20261025-042311_m2-smalldocs-r1.jsonl",
+    "20261025-042419_m2-smalldocs-r2.jsonl",
+    "20261025-042526_m2-smalldocs-r3.jsonl"
+  ],
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "dense",
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions.jsonl",
+    "system_prompt_sha256": "07d9753c80eb",
+    "doc_meta": false,
+    "guardrail": true,
+    "small_docs": [
+      "01_menu_prices"
+    ],
+    "git_commit": "08d05c470e8c09d494ca92eeeff0f097a898a9d7",
+    "git_dirty": false,
+    "repeat": 1,
+    "repeats": 3
+  },
+  "aggregate": {
+    "repeats": 3,
+    "behavior_accuracy": {
+      "mean": 0.9933333333333333,
+      "min": 0.98,
+      "max": 1.0,
+      "values": [
+        1.0,
+        0.98,
+        1.0
+      ]
+    },
+    "hand_label_accuracy": {
+      "mean": 0.9866666666666667,
+      "min": 0.98,
+      "max": 1.0,
+      "values": [
+        0.98,
+        0.98,
+        1.0
+      ]
+    },
+    "labeled": [
+      50,
+      50,
+      50
+    ],
+    "refuse_redirect_violation_rate": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "latency_mean_ms": {
+      "mean": 1343.04,
+      "min": 1336.26,
+      "max": 1353.26,
+      "values": [
+        1353.26,
+        1339.6,
+        1336.26
+      ]
+    },
+    "input_tokens": {
+      "mean": 145110.0,
+      "min": 145110,
+      "max": 145110,
+      "values": [
+        145110,
+        145110,
+        145110
+      ]
+    },
+    "estimated_cost_usd": {
+      "mean": 0.017109666666666665,
+      "min": 0.017056,
+      "max": 0.017147,
+      "values": [
+        0.017126,
+        0.017056,
+        0.017147
+      ]
+    },
+    "flips": [
+      {
+        "id": "q36",
+        "expected": [
+          "handoff"
+        ],
+        "behaviors": [
+          "handoff",
+          "answer",
+          "handoff"
+        ],
+        "behavior_ok": [
+          true,
+          false,
+          true
+        ],
+        "correct": [
+          false,
+          false,
+          true
+        ]
+      }
+    ],
+    "context_recall": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "guardrail_fired": [
+      [],
+      [
+        "q38"
+      ],
+      [
+        "q36"
+      ]
+    ]
+  }
+}

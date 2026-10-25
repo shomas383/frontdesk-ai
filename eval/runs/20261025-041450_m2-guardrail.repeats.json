@@ -1,0 +1,143 @@
+{
+  "name": "m2-guardrail",
+  "runs": [
+    "20261025-041510_m2-guardrail-r1.jsonl",
+    "20261025-041620_m2-guardrail-r2.jsonl",
+    "20261025-041729_m2-guardrail-r3.jsonl"
+  ],
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "retrieval": "dense",
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "questions_file": "eval/questions.jsonl",
+    "system_prompt_sha256": "07d9753c80eb",
+    "doc_meta": false,
+    "guardrail": true,
+    "git_commit": "44b7456b2f381cd3bff75e7ebb53196ffe32179f",
+    "git_dirty": false,
+    "repeat": 1,
+    "repeats": 3
+  },
+  "aggregate": {
+    "repeats": 3,
+    "behavior_accuracy": {
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "values": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    "hand_label_accuracy": {
+      "mean": 0.9866666666666667,
+      "min": 0.96,
+      "max": 1.0,
+      "values": [
+        1.0,
+        0.96,
+        1.0
+      ]
+    },
+    "labeled": [
+      50,
+      50,
+      50
+    ],
+    "refuse_redirect_violation_rate": {
+      "mean": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "values": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "latency_mean_ms": {
+      "mean": 1391.7066666666667,
+      "min": 1382.98,
+      "max": 1404.84,
+      "values": [
+        1404.84,
+        1382.98,
+        1387.3
+      ]
+    },
+    "input_tokens": {
+      "mean": 137131.0,
+      "min": 137131,
+      "max": 137131,
+      "values": [
+        137131,
+        137131,
+        137131
+      ]
+    },
+    "estimated_cost_usd": {
+      "mean": 0.0162906,
+      "min": 0.0162566,
+      "max": 0.0163576,
+      "values": [
+        0.0162566,
+        0.0163576,
+        0.0162576
+      ]
+    },
+    "flips": [
+      {
+        "id": "q20",
+        "expected": [
+          "answer"
+        ],
+        "behaviors": [
+          "answer",
+          "answer",
+          "answer"
+        ],
+        "behavior_ok": [
+          true,
+          true,
+          true
+        ],
+        "correct": [
+          true,
+          false,
+          true
+        ]
+      },
+      {
+        "id": "q35",
+        "expected": [
+          "answer"
+        ],
+        "behaviors": [
+          "answer",
+          "answer",
+          "answer"
+        ],
+        "behavior_ok": [
+          true,
+          true,
+          true
+        ],
+        "correct": [
+          true,
+          false,
+          true
+        ]
+      }
+    ],
+    "guardrail_fired": [
+      [],
+      [],
+      []
+    ]
+  }
+}
