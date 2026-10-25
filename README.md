@@ -2,7 +2,7 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — local API done.** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
+**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — local API and web chat done.** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
 
 ## How it works
 
@@ -132,12 +132,13 @@ python -m src.compare eval\runs\<base>.jsonl eval\runs\<new>.jsonl [--carry-labe
 | `TRUST_PROXY_HEADERS` | `false` | API: rate-limit by `X-Forwarded-For` (only behind a trusted proxy) |
 | `CORS_ORIGINS` | none | API: comma-separated browser origins |
 | `APP_PORT` | `8000` | host port for `docker compose --profile app up` |
+| `DEMO_AUTOSEND` | `false` | web page: allow `?demo=q1\|q2` auto-send (screenshots / demo video) |
 
 Cost: the model runs with thinking disabled, `effort: low` and `max_tokens: 500`. A full 50-question run on Haiku 5.5 costs well under $0.10.
 
 ## API (local)
 
-`src/app.py` serves the same answer path as the eval: dense top-5, small-docs expansion, prompt v2 and the guardrail, with the same defaults as `python -m src.eval`.
+`src/app.py` serves a web chat page at `/` and the same answer path as the eval: dense top-5, small-docs expansion, prompt v2 and the guardrail, with the same defaults as `python -m src.eval`.
 
 ```powershell
 # Dev: against the database on localhost:5433 (APP_TODAY pins the date the docs are judged against)
@@ -161,6 +162,8 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 | | `404` unknown tenant · `422` empty message or over `MAX_MESSAGE_CHARS` · `429` per-IP limit (with `Retry-After`) |
 | | Daily question cap or token budget used up: `200` with 「…お電話またはLINEにて当院へ直接お問い合わせください。」, `behavior: handoff`; the LLM is not called |
 | `GET /health` | `200 {status, db, model}`, or `503` if the database is unreachable |
+| `GET /` | The web chat (below) |
+| `GET /api/config` | `{tenant, clinic_name, doc_labels, max_message_chars, demo_autosend}` for the page |
 
 **Protection:**
 - Per-IP limits (`RATE_LIMIT_PER_MINUTE`/`_PER_DAY`) live in process memory, keyed by a salted hash of the IP.
@@ -174,6 +177,18 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 - **Postgres:** about 75 MB.
 - **Image:** 3.3 GB, with CPU-only torch and bge-m3 baked in.
 - **Sizing:** a 2 GB instance is enough for the demo.
+
+### Web chat
+
+Open http://localhost:8000/. It is plain HTML/CSS/JS in [src/static/](src/static/): no build step, no CDNs, no web fonts.
+
+- **Header:** a disclaimer banner and an "About this demo" link to this repo.
+- **Suggested-question chips:** they show off the strengths: price, holiday hours, a stale blog price, an ended campaign, and a medical question.
+- **Under each answer:** source chips with friendly names from `data/<tenant>/site.json`, and a tag for `handoff` (スタッフにおつなぎします) or `refuse_redirect` (医療機関へのご相談をおすすめ).
+- **Input and errors:** a 300-character counter, and friendly messages for 422, 429 (with a live `Retry-After` countdown) and network errors.
+- **Nothing is stored:** no localStorage or cookies; a reload clears the chat. Answers are inserted as text, never as HTML.
+- **Security headers:** a strict CSP (`default-src 'self'`), `nosniff`, and `no-referrer`.
+- **`?demo=q1|q2`** auto-sends questions for screenshots and the demo video. It works only with `DEMO_AUTOSEND=true` (off by default).
 
 ### Logs and retention
 

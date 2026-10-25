@@ -21,6 +21,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 - **Milestone 3 (automatic LLM answer grader, calibrated against the hand labels): planned, deferred** so the public demo can come first. The milestone number is intentionally skipped for now.
 - **Milestone 4 (public demo): in progress.** Web chat, LINE integration, AWS deployment (Bedrock) and a demo video.
   - Step 1 done: local API (`src/app.py`) + Dockerfile + compose `app` profile. See README "API (local)".
+  - Step 2 done: web chat at `GET /` (`src/static/`, no build step or CDNs; strict CSP, so no inline script or style).
 
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.
@@ -54,6 +55,7 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 | `src/pricing.py` | token prices + `estimate_cost_usd` (eval and API) |
 | `src/app.py` | FastAPI `POST /chat`, `GET /health`; calls `answer_question` with no feature kwargs so it always matches eval defaults (a test enforces this). JSON-line request logs on stdout, no IPs |
 | `src/limits.py`, `src/usage.py`, `src/redact.py` | per-IP rate limiter (in memory → **uvicorn must run with 1 worker**); daily question cap + token budget in Postgres `usage_daily` (JST day); phone/email redaction before logging |
+| `src/static/`, `data/<tenant>/site.json` | web chat page; `site.json` holds `clinic_name` + `doc_labels` (a test requires a label for every doc, so add one when adding a doc). `?demo=` auto-send only with `DEMO_AUTOSEND=true` |
 | `Dockerfile`, `docker-compose.yml` | CPU torch + bge-m3 baked in. `docker compose up -d` starts only the dev db; `--profile app` adds the API, which runs `ingest --if-empty` on start |
 | `data/<tenant>/docs/` | clinic docs (source of truth for answers) |
 | `data/<tenant>/doc_meta.json`, `src/doc_meta.py` | per-doc/section `doc_type` (official, news, blog, campaign) + published/effective/valid_until dates. Always used by the guardrail on the server side. Shown to the LLM only with `--doc-meta` (off by default). Keep it in sync when docs change; a test checks coverage |
