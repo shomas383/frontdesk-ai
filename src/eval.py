@@ -1,0 +1,167 @@
+"""Run the eval set, save per-question results and print metrics.
+
+Usage: python -m src.eval --name baseline [--limit N] [--tenant ...] [--today 2026-10-24]
+Output: eval/runs/<YYYYMMDD-HHMMSS>_<name>.jsonl and .summary.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from src import db
+from src.answer import answer_question
+from src.config import DEFAULT_TENANT, EVAL_DIR, MAX_TOKENS, ROOT_DIR, TOP_K, get_settings
+from src.embeddings import embed_one
+from src.llm import get_provider
+from src.metrics import Row, forbidden_phrases, summarize
+from src.prompts import prompt_hash
+
+# USD per million tokens (prompts <= 100K tokens).
+# Source: https://platform.claude.com/docs/en/about-claude/pricing (checked 2026-10-24).
+PRICING_PER_MTOK: dict[str, tuple[float, float]] = {
+    "claude-haiku-5-5": (0.10, 0.50),
+    "claude-haiku-4-5": (1.00, 5.00),
+}
+
+# The dataset's notices are written relative to late October 2026; pin "today" for reproducibility.
+DEFAULT_EVAL_TODAY = "2026-10-24"
+
+
+def load_questions(path: Path, limit: int | None) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8") as f:
+        questions = [json.loads(line) for line in f if line.strip()]
+    return questions[:limit] if limit else questions
+
+
+def _git(*args: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", *args], cwd=ROOT_DIR, capture_output=True, text=True, check=True, timeout=10
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip()
+
+
+def git_provenance() -> dict[str, Any]:
+    commit = _git("rev-parse", "HEAD")
+    status = _git("status", "--porcelain") if commit else None
+    return {"git_commit": commit, "git_dirty": bool(status) if commit else None}
+
+
+def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> float | None:
+    prices = next((p for name, p in PRICING_PER_MTOK.items() if name in model_id), None)
+    if prices is None:
+        return None
+    return (input_tokens * prices[0] + output_tokens * prices[1]) / 1_000_000
+
+
+def run_eval(name: str, tenant_id: str, today: str, limit: int | None) -> tuple[Path, list[Row]]:
+    questions = load_questions(EVAL_DIR / "questions.jsonl", limit)
+    provider = get_provider()
+    embed_one("warm-up")  # load bge-m3 now so model loading isn't counted in q01's latency
+    p_hash = prompt_hash()
+    runs_dir = EVAL_DIR / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    out_path = runs_dir / f"{datetime.now():%Y%m%d-%H%M%S}_{name}.jsonl"
+
+    rows: list[Row] = []
+    with db.connect() as conn, out_path.open("w", encoding="utf-8") as out:
+        for i, q in enumerate(questions, 1):
+            res = answer_question(conn, provider, tenant_id, q["question"], today)
+            row: Row = {
+                "id": q["id"],
+                "category": q["category"],
+                "question": q["question"],
+                "expected_behavior": q["expected_behavior"],
+                "expected_answer": q["expected_answer"],
+                "expected_sources": q["sources"],
+                "trap": q.get("trap"),
+                "retrieved_chunk_ids": res.retrieved_chunk_ids,
+                "retrieved_doc_ids": res.retrieved_doc_ids,
+                "retrieval_scores": [r["score"] for r in res.retrieved],
+                "answer": res.answer,
+                "behavior": res.behavior,
+                "sources": res.sources,
+                "invalid_sources": res.invalid_sources,
+                "forbidden_phrases": forbidden_phrases(res.answer),
+                "stop_reason": res.stop_reason,
+                "latency_ms": res.latency_ms,
+                "llm_latency_ms": res.llm_latency_ms,
+                "input_tokens": res.input_tokens,
+                "output_tokens": res.output_tokens,
+                "error": res.error,
+                "prompt_hash": p_hash,
+                "correct": None,  # hand-label: true / false
+            }
+            out.write(json.dumps(row, ensure_ascii=False) + "\n")
+            rows.append(row)
+            mark = "ok" if row["behavior"] == row["expected_behavior"] else "XX"
+            print(f"[{i:>2}/{len(questions)}] {q['id']} {mark} {row['behavior']:<15} {res.latency_ms:>5}ms")
+
+    summary = {
+        "run": out_path.name,
+        "config": {
+            "tenant": tenant_id,
+            "provider": get_settings().llm_provider,
+            "model": provider.model_id,
+            "embed_model": get_settings().embed_model,
+            "top_k": TOP_K,
+            "max_tokens": MAX_TOKENS,
+            "today": today,
+            "system_prompt_sha256": p_hash,
+            **git_provenance(),
+        },
+        "metrics": summarize(rows),
+    }
+    tokens = summary["metrics"]["tokens"]
+    summary["metrics"]["estimated_cost_usd"] = estimate_cost_usd(
+        provider.model_id, tokens["input"], tokens["output"]
+    )
+    out_path.with_suffix(".summary.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print_report(summary)
+    return out_path, rows
+
+
+def _pct(value: float | None) -> str:
+    return "  n/a" if value is None else f"{value * 100:5.1f}%"
+
+
+def print_report(summary: dict[str, Any]) -> None:
+    m = summary["metrics"]
+    print(f"\n=== {summary['run']} ({summary['config']['model']}) ===")
+    print(f"recall@{TOP_K}: {_pct(m['retrieval']['recall'])}  hit@{TOP_K}: {_pct(m['retrieval']['hit'])}"
+          f"  (n={m['retrieval']['n']} questions with sources)")
+    print(f"behavior accuracy: {_pct(m['behavior_accuracy'])}  (n={m['n']})")
+    fp = m["forbidden_phrases"]
+    print(f"forbidden phrases on refuse_redirect: {_pct(fp['refuse_redirect_violation_rate'])}"
+          f"  | flagged overall: {fp['all_flagged_count']} {fp['flagged_ids']}")
+    print(f"stop_reasons: {m['stop_reasons']}  errors: {m['errors']}")
+    lat, cost = m["latency_ms"], m["estimated_cost_usd"]
+    cost_str = "n/a" if cost is None else f"${cost:.4f}"
+    print(f"latency mean {lat['mean']:.0f}ms p95 {lat['p95']:.0f}ms | tokens in {m['tokens']['input']}"
+          f" out {m['tokens']['output']} | est. cost {cost_str}")
+    print(f"\n{'category':<16}{'n':>4}{'behavior':>10}{'recall':>9}{'hit':>9}")
+    for cat, c in m["per_category"].items():
+        print(f"{cat:<16}{c['n']:>4}{_pct(c['behavior_acc']):>10}{_pct(c['recall']):>9}{_pct(c['hit']):>9}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--name", required=True, help="short label for this run, e.g. baseline")
+    parser.add_argument("--tenant", default=DEFAULT_TENANT)
+    parser.add_argument("--today", default=DEFAULT_EVAL_TODAY)
+    parser.add_argument("--limit", type=int, default=None)
+    args = parser.parse_args()
+    run_eval(args.name, args.tenant, args.today, args.limit)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,80 @@
+{
+  "run": "20261024-184900_baseline.jsonl",
+  "config": {
+    "tenant": "komorebi-seitai-demo",
+    "provider": "anthropic",
+    "model": "claude-haiku-5-5",
+    "embed_model": "BAAI/bge-m3",
+    "top_k": 5,
+    "max_tokens": 500,
+    "today": "2026-10-24",
+    "system_prompt_sha256": "7ca70945aa30",
+    "git_commit": null,
+    "git_dirty": null
+  },
+  "metrics": {
+    "n": 50,
+    "retrieval": {
+      "n": 40,
+      "recall": 1.0,
+      "hit": 1.0
+    },
+    "behavior_accuracy": 0.98,
+    "forbidden_phrases": {
+      "refuse_redirect_n": 7,
+      "refuse_redirect_violation_rate": 0.0,
+      "all_flagged_count": 0,
+      "flagged_ids": []
+    },
+    "per_category": {
+      "direct": {
+        "n": 20,
+        "behavior_acc": 1.0,
+        "retrieval_n": 20,
+        "recall": 1.0,
+        "hit": 1.0
+      },
+      "paraphrase": {
+        "n": 10,
+        "behavior_acc": 1.0,
+        "retrieval_n": 10,
+        "recall": 1.0,
+        "hit": 1.0
+      },
+      "multi_doc": {
+        "n": 5,
+        "behavior_acc": 1.0,
+        "retrieval_n": 5,
+        "recall": 1.0,
+        "hit": 1.0
+      },
+      "out_of_scope": {
+        "n": 8,
+        "behavior_acc": 0.875,
+        "retrieval_n": 1,
+        "recall": 1.0,
+        "hit": 1.0
+      },
+      "symptom_refuse": {
+        "n": 7,
+        "behavior_acc": 1.0,
+        "retrieval_n": 4,
+        "recall": 1.0,
+        "hit": 1.0
+      }
+    },
+    "stop_reasons": {
+      "end_turn": 50
+    },
+    "errors": 0,
+    "latency_ms": {
+      "mean": 1511.86,
+      "p95": 2219.0
+    },
+    "tokens": {
+      "input": 118714,
+      "output": 5345
+    },
+    "estimated_cost_usd": 0.014543900000000002
+  }
+}

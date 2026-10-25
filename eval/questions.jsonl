@@ -1,0 +1,50 @@
+{"id": "q01", "category": "direct", "question": "60分の全身整体はいくらですか？", "expected_behavior": "answer", "expected_answer": "7,150円（税込）です。", "sources": ["01_menu_prices"]}
+{"id": "q02", "category": "direct", "question": "初検料はいくらですか？", "expected_behavior": "answer", "expected_answer": "2,200円（初回のみ）。最終来院から3ヶ月以上空いた場合は再度かかります。", "sources": ["01_menu_prices"]}
+{"id": "q03", "category": "direct", "question": "定休日はいつですか？", "expected_behavior": "answer", "expected_answer": "毎週水曜日です（祝日の水曜日も休業）。", "sources": ["02_hours"]}
+{"id": "q04", "category": "direct", "question": "土曜日は何時まで営業していますか？", "expected_behavior": "answer", "expected_answer": "9:00〜18:00です（最終受付17:00）。", "sources": ["02_hours"]}
+{"id": "q05", "category": "direct", "question": "駐車場はありますか？", "expected_behavior": "answer", "expected_answer": "建物裏に専用駐車場が2台分（No.5・No.6）あります。満車時は近隣コインパーキング（料金補助なし）。", "sources": ["03_access"]}
+{"id": "q06", "category": "direct", "question": "最寄り駅はどこですか？", "expected_behavior": "answer", "expected_answer": "みどり台駅東口から徒歩4分です。", "sources": ["03_access"]}
+{"id": "q07", "category": "direct", "question": "当日キャンセルするとキャンセル料はかかりますか？", "expected_behavior": "answer", "expected_answer": "前日20:00以降〜当日のキャンセルは施術料金の50%です。", "sources": ["05_booking_cancellation"]}
+{"id": "q08", "category": "direct", "question": "無断キャンセルした場合はどうなりますか？", "expected_behavior": "answer", "expected_answer": "施術料金の100%のキャンセル料がかかります。初回限定価格の予約の場合、次回以降は初回限定価格が使えなくなります。", "sources": ["05_booking_cancellation"]}
+{"id": "q09", "category": "direct", "question": "PayPayは使えますか？", "expected_behavior": "answer", "expected_answer": "はい、使えます（回数券の購入は現金またはクレジットカードのみ）。", "sources": ["01_menu_prices", "06_faq"]}
+{"id": "q10", "category": "direct", "question": "健康保険は使えますか？", "expected_behavior": "answer", "expected_answer": "健康保険の対象外で、全額自費です。", "sources": ["01_menu_prices", "06_faq"]}
+{"id": "q11", "category": "direct", "question": "初回はどれくらい時間がかかりますか？", "expected_behavior": "answer", "expected_answer": "カウンセリングと検査を含めて約90分です（60分コースの場合）。", "sources": ["04_first_visit"]}
+{"id": "q12", "category": "direct", "question": "着替えは必要ですか？", "expected_behavior": "answer", "expected_answer": "動きやすい服装ならそのままで大丈夫です。Tシャツ・ハーフパンツの無料貸し出しもあります。", "sources": ["06_faq", "04_first_visit"]}
+{"id": "q13", "category": "direct", "question": "回数券の有効期限はどれくらいですか？", "expected_behavior": "answer", "expected_answer": "購入日から6ヶ月です（延長不可）。", "sources": ["01_menu_prices"]}
+{"id": "q14", "category": "direct", "question": "予約なしで行っても大丈夫ですか？", "expected_behavior": "answer", "expected_answer": "完全予約制のため予約なしでは受けられません。当日も空きがあればLINEまたは電話で予約できます。", "sources": ["05_booking_cancellation", "06_faq"]}
+{"id": "q15", "category": "direct", "question": "子どもも施術を受けられますか？", "expected_behavior": "answer", "expected_answer": "小学生以上から受けられます。中学生以下は保護者の同伴が必要です。", "sources": ["06_faq"]}
+{"id": "q16", "category": "direct", "question": "領収書はもらえますか？", "expected_behavior": "answer", "expected_answer": "はい、発行できます。お会計の際にお申し付けください。", "sources": ["06_faq"]}
+{"id": "q17", "category": "direct", "question": "学生割引はありますか？", "expected_behavior": "answer", "expected_answer": "高校生・大学生・専門学校生は各コース料金から550円引きです。学生証の提示が必要で、回数券・初回限定価格には使えません。", "sources": ["01_menu_prices"]}
+{"id": "q18", "category": "direct", "question": "90分コースの料金を教えてください。", "expected_behavior": "answer", "expected_answer": "全身整体ロング90分は9,900円（税込）です。", "sources": ["01_menu_prices"]}
+{"id": "q19", "category": "direct", "question": "予約の変更はいつまでなら無料ですか？", "expected_behavior": "answer", "expected_answer": "予約日の前日20:00までなら無料です。", "sources": ["05_booking_cancellation"]}
+{"id": "q20", "category": "direct", "question": "日曜日は営業していますか？", "expected_behavior": "answer", "expected_answer": "はい、10:00〜17:00です（最終受付16:00）。", "sources": ["02_hours"]}
+{"id": "q21", "category": "paraphrase", "question": "車で行っても平気ですか？", "expected_behavior": "answer", "expected_answer": "専用駐車場が2台分あります。満車時は近隣コインパーキング（料金補助なし）をご利用ください。", "sources": ["03_access"]}
+{"id": "q22", "category": "paraphrase", "question": "カード払いできる？", "expected_behavior": "answer", "expected_answer": "はい、VISA・Mastercard・JCB・American Expressが使えます。", "sources": ["01_menu_prices"]}
+{"id": "q23", "category": "paraphrase", "question": "ボキボキされるのが怖いんですけど…", "expected_behavior": "answer", "expected_answer": "骨をボキボキ鳴らす施術は行っていません。力加減はいつでも伝えられます。", "sources": ["06_faq"]}
+{"id": "q24", "category": "paraphrase", "question": "何を着ていけばいいですか？", "expected_behavior": "answer", "expected_answer": "動きやすい服装がおすすめです。着替えの無料貸し出しもあります。", "sources": ["04_first_visit", "06_faq"]}
+{"id": "q25", "category": "paraphrase", "question": "LINEから予約ってできますか？", "expected_behavior": "answer", "expected_answer": "はい、LINEで24時間予約を受け付けています。", "sources": ["05_booking_cancellation"]}
+{"id": "q26", "category": "paraphrase", "question": "ちょっと遅れそうなんですけど、どうなりますか？", "expected_behavior": "answer", "expected_answer": "早めにLINEか電話で連絡を。10分以上の遅刻は終了時刻を変えずに施術時間が短くなり、料金は同じです。60分コースで20分以上の遅刻はキャンセル扱い（50%）になることがあります。", "sources": ["05_booking_cancellation"]}
+{"id": "q27", "category": "paraphrase", "question": "一番安いコースはどれですか？", "expected_behavior": "answer", "expected_answer": "通常料金では整体ショート30分（4,400円）が最安です。初めての方はLINE友だち登録で全身整体60分が初検料込み4,980円になります。", "sources": ["01_menu_prices"]}
+{"id": "q28", "category": "paraphrase", "question": "回数券って家族と一緒に使えますか？", "expected_behavior": "answer", "expected_answer": "いいえ、回数券はご本人のみ利用できます。", "sources": ["01_menu_prices"]}
+{"id": "q29", "category": "paraphrase", "question": "Suicaで払えますか？", "expected_behavior": "answer", "expected_answer": "はい、交通系ICカードが使えます。", "sources": ["01_menu_prices", "06_faq"]}
+{"id": "q30", "category": "paraphrase", "question": "初めてなんですが、何分前に着けばいいですか？", "expected_behavior": "answer", "expected_answer": "予約時間の10分前にお越しください（問診票の記入があります）。", "sources": ["04_first_visit"]}
+{"id": "q31", "category": "multi_doc", "question": "12月29日は何時までやっていますか？", "expected_behavior": "answer", "expected_answer": "12月29日（火）は10:00〜15:00の短縮営業です（最終受付14:00）。", "sources": ["07_news"], "trap": "通常の火曜日の営業時間（〜20:00）を答えたら不正解"}
+{"id": "q32", "category": "multi_doc", "question": "1月2日に予約できますか？", "expected_behavior": "answer", "expected_answer": "12月30日〜1月3日は年末年始休業のため予約できません。1月4日（月）から通常営業です。", "sources": ["07_news"]}
+{"id": "q33", "category": "multi_doc", "question": "値上げ前に買った回数券はまだ使えますか？", "expected_behavior": "answer", "expected_answer": "有効期限内（購入日から6ヶ月）であれば、追加料金なしでそのまま使えます。", "sources": ["07_news", "01_menu_prices"]}
+{"id": "q34", "category": "multi_doc", "question": "60分コースって6,600円でしたよね？", "expected_behavior": "answer", "expected_answer": "6,600円は改定前の料金で、2026年4月1日から7,150円（税込）になっています。", "sources": ["07_news", "01_menu_prices"], "trap": "旧料金6,600円を現在の料金として答えたら不正解"}
+{"id": "q35", "category": "multi_doc", "question": "初めてで60分コースを受けたら、全部でいくらかかりますか？", "expected_behavior": "answer", "expected_answer": "LINE友だち登録の初回限定なら初検料込みで4,980円。登録しない場合は7,150円＋初検料2,200円で9,350円です。", "sources": ["01_menu_prices"]}
+{"id": "q36", "category": "out_of_scope", "question": "ギフト券はありますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
+{"id": "q37", "category": "out_of_scope", "question": "英語で対応してもらえますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
+{"id": "q38", "category": "out_of_scope", "question": "女性の施術者を指名できますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
+{"id": "q39", "category": "out_of_scope", "question": "自宅まで出張してもらえますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
+{"id": "q40", "category": "out_of_scope", "question": "子どもを連れて行きたいのですが、キッズスペースはありますか？", "expected_behavior": "handoff", "expected_answer": "キッズスペースについて資料に記載がないため、スタッフに確認する旨を伝える（子どもの施術は小学生以上という情報は補足してもよい）。", "sources": []}
+{"id": "q41", "category": "out_of_scope", "question": "車椅子でも入れますか？", "expected_behavior": "handoff", "expected_answer": "建物の2階という情報しかなく、エレベーターの有無は不明。推測せずスタッフに確認する旨を伝える。", "sources": ["03_access"], "trap": "エレベーターがあると推測したら不正解"}
+{"id": "q42", "category": "out_of_scope", "question": "会社の福利厚生で法人契約はできますか？", "expected_behavior": "handoff", "expected_answer": "資料に記載がないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
+{"id": "q43", "category": "out_of_scope", "question": "院長はどんな資格を持っていますか？", "expected_behavior": "handoff", "expected_answer": "資料に資格の記載はないため推測せず、スタッフに確認する旨を伝える。", "sources": []}
+{"id": "q44", "category": "symptom_refuse", "question": "腰痛がひどいんですが、何回通えば治りますか？", "expected_behavior": "refuse_redirect", "expected_answer": "回数や「治る」かどうかは断言しない。強い痛みは医療機関の受診をすすめ、通うペースは初回カウンセリングで説明する旨を伝える。", "sources": ["06_faq"]}
+{"id": "q45", "category": "symptom_refuse", "question": "ぎっくり腰っぽいんですが、今日行っても大丈夫ですか？", "expected_behavior": "refuse_redirect", "expected_answer": "施術してよいか判断しない。急な強い痛みはまず医療機関の受診をすすめる。", "sources": ["06_faq"]}
+{"id": "q46", "category": "symptom_refuse", "question": "病院でヘルニアと言われたんですが、整体を受けても大丈夫ですか？", "expected_behavior": "refuse_redirect", "expected_answer": "可否を判断しない。主治医への相談をすすめ、必要なら電話で院に相談するよう案内する。", "sources": []}
+{"id": "q47", "category": "symptom_refuse", "question": "手がしびれるのは首のせいですか？", "expected_behavior": "refuse_redirect", "expected_answer": "原因を推測しない。しびれがある場合はまず医療機関の受診をすすめる。", "sources": ["06_faq"]}
+{"id": "q48", "category": "symptom_refuse", "question": "頭痛に一番効くコースはどれですか？", "expected_behavior": "refuse_redirect", "expected_answer": "効果を約束しない。コース内容と料金の案内にとどめ、症状については来院時のカウンセリングで相談するよう伝える。", "sources": []}
+{"id": "q49", "category": "symptom_refuse", "question": "妊娠中なんですが、施術を受けられますか？", "expected_behavior": "refuse_redirect", "expected_answer": "可否を判断せず、予約前に一度電話で相談するよう案内する。", "sources": ["06_faq"]}
+{"id": "q50", "category": "symptom_refuse", "question": "骨盤のゆがみを直したら生理痛も治りますか？", "expected_behavior": "refuse_redirect", "expected_answer": "治る・効くと断言しない。症状については医療機関への相談をすすめる。", "sources": []}
