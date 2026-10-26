@@ -1,0 +1,14 @@
+[Unit]
+Description=frontdesk-ai pull-based deploy (deploys a new ghcr.io :prod digest)
+Documentation=file:///opt/frontdesk/pull-deploy.sh
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# IMAGE_REPO, DEPLOY_TAG, PARAM_PATH, LOG_GROUP, AWS_REGION (written by cloud-init from Terraform).
+EnvironmentFile=/etc/frontdesk/deploy.env
+ExecStart=/opt/frontdesk/pull-deploy.sh
+# A first deploy pulls ~3 GB, ingests and loads the model; deploy.sh itself gives up after 15 min.
+TimeoutStartSec=40min

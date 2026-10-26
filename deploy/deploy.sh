@@ -76,6 +76,14 @@ compose() {
 log "starting $IMAGE"
 compose up -d --remove-orphans
 
+# Compose doesn't notice a changed Caddyfile (a bind mount of a file in the release directory, which
+# pull-deploy.sh replaces), so restart Caddy when its content changes; the restart re-reads the path.
+caddy_sum=$(sha256sum "$DIR/Caddyfile" | cut -d' ' -f1)
+if [ "$caddy_sum" != "$(cat "$FRONTDESK_HOME/caddyfile.sha256" 2>/dev/null || true)" ]; then
+    compose restart caddy
+    echo "$caddy_sum" >"$FRONTDESK_HOME/caddyfile.sha256"
+fi
+
 # Wait for the app's healthcheck (ingest + model load take a few minutes on a t3.small).
 app=$(compose ps -q app)
 [ -n "$app" ] || fail "app container not found"

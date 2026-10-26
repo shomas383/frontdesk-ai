@@ -1,0 +1,9 @@
+# Copy to terraform.tfvars (gitignored) and fill in. The Cloudflare API token is NOT set here:
+# export it as CLOUDFLARE_API_TOKEN in the shell that runs terraform.
+cloudflare_zone_id = ""
+
+# Defaults (see variables.tf); uncomment to change.
+# region         = "us-east-2"
+# domain         = "demo.shomasawa.com"
+# instance_type  = "t3.small"
+# root_volume_gb = 30

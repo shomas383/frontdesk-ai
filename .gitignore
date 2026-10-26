@@ -1,6 +1,14 @@
 # Secrets
 .env
 
+# Terraform (state is local and may hold resource IDs; back it up, never commit it)
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+infra/terraform.tfvars
+*.tfplan
+infra/tf.plan
+
 # Python
 __pycache__/
 *.py[cod]

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for a new frontdesk-ai release every 2 minutes
+
+[Timer]
+OnBootSec=1min
+# Counted from the last run's start; systemd never starts the service while it is still running.
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target
