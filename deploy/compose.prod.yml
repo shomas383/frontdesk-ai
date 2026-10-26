@@ -1,0 +1,95 @@
+# Production stack on the EC2 host: Caddy (HTTPS) -> app -> Postgres/pgvector.
+# Started by deploy.sh with --env-file /opt/frontdesk/.env, which it renders from Parameter Store
+# (/frontdesk-ai/prod/*) plus APP_IMAGE (the release, pinned by digest). Only Caddy publishes ports.
+name: frontdesk
+
+x-logging: &logging
+  # Container logs go to CloudWatch with the instance role's credentials (the Docker daemon runs on
+  # the host, so IMDS hop limit 1 still works for it). One stream per container, e.g. frontdesk-app-1.
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION:-us-east-2}
+    awslogs-group: ${LOG_GROUP:-/frontdesk-ai/prod}
+    tag: "{{.Name}}"
+    mode: non-blocking
+    max-buffer-size: 4m
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: frontdesk
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d frontdesk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    environment:
+      LLM_PROVIDER: anthropic
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/frontdesk
+      ALLOWED_TENANTS: komorebi-seitai-demo
+      # The demo docs' notices are written relative to this date; pinned so answers match the eval.
+      APP_TODAY: "2026-10-24"
+      # Caddy replaces any client-sent X-Forwarded-For with the real peer IP, and the app port is not
+      # published, so the right-most entry is the visitor. Without this, everyone shares Caddy's IP.
+      TRUST_PROXY_HEADERS: "true"
+      DEMO_AUTOSEND: "false"
+      CORS_ORIGINS: ""
+      # Step 1 limits; a Parameter Store value of the same name overrides one (DAILY_QUESTION_CAP=0
+      # turns the LLM off).
+      MAX_MESSAGE_CHARS: ${MAX_MESSAGE_CHARS:-300}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-10}
+      RATE_LIMIT_PER_DAY: ${RATE_LIMIT_PER_DAY:-50}
+      DAILY_QUESTION_CAP: ${DAILY_QUESTION_CAP:-500}
+      DAILY_TOKEN_BUDGET: ${DAILY_TOKEN_BUDGET:-2000000}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Full ingest on every start, so the database always matches the docs baked into this image
+    # (it also removes chunks of deleted sections). It exits before uvicorn loads the model again,
+    # so the two memory peaks don't overlap. One worker: the per-IP limiter is in process memory.
+    command:
+      - sh
+      - -c
+      - >-
+        python -m src.ingest --tenant $$(echo "$${ALLOWED_TENANTS}" | tr ',' ' ')
+        && exec uvicorn src.app:app --host 0.0.0.0 --port 8000 --workers 1 --no-access-log
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 600s
+      retries: 3
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2.11.6-alpine
+    environment:
+      DOMAIN: ${DOMAIN:-demo.shomasawa.com}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data  # certificates and ACME account; keeps us clear of Let's Encrypt rate limits
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

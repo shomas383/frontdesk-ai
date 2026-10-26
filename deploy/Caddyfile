@@ -1,0 +1,22 @@
+{
+	# There is no access log (no `log` directive in the site below): it would record client IPs.
+	# Caddy still logs errors, and a proxy error (e.g. a 502 while the app restarts) carries the
+	# request, so strip the client address and headers before the line reaches CloudWatch.
+	log default {
+		output stderr
+		format filter {
+			request>remote_ip delete
+			request>remote_port delete
+			request>client_ip delete
+			request>headers delete
+		}
+	}
+}
+
+# DOMAIN comes from compose (demo.shomasawa.com in production). Caddy gets and renews the
+# Let's Encrypt certificate itself and redirects HTTP to HTTPS.
+{$DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy app:8000
+}

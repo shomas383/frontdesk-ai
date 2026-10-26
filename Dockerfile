@@ -22,6 +22,9 @@ ENV HF_HUB_OFFLINE=1
 
 COPY src/ src/
 COPY data/ data/
+# The production compose file, Caddyfile and deploy script travel with the release; the EC2 host
+# copies them out of the image it is about to run (infra/host/pull-deploy.sh).
+COPY deploy/ deploy/
 
 RUN useradd --create-home --uid 10001 app && chown -R app /app
 

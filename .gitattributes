@@ -7,3 +7,6 @@ Caddyfile text eol=lf
 *.timer text eol=lf
 *.yml text eol=lf
 Dockerfile text eol=lf
+# Everything shipped to the host (tests/test_deploy_files.py checks for stray \r here).
+deploy/** text eol=lf
+infra/host/** text eol=lf
