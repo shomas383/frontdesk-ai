@@ -20,8 +20,16 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - doc metadata in the context (`--doc-meta`)
 - **Milestone 3 (automatic LLM answer grader, calibrated against the hand labels): planned, deferred** so the public demo can come first. The milestone number is intentionally skipped for now.
 - **Milestone 4 (public demo): in progress.** Web chat, LINE integration, AWS deployment (Bedrock) and a demo video.
-  - Step 1 done: local API (`src/app.py`) + Dockerfile + compose `app` profile. See README "API (local)".
-  - Step 2 done: web chat at `GET /` (`src/static/`, no build step or CDNs; strict CSP, so no inline script or style).
+  - **Step 1 (API): done.** Local API (`src/app.py`), Dockerfile and the compose `app` profile. See README "API (local)".
+  - **Step 2 (web chat): done.** Served at `GET /` from `src/static/`: no build step or CDNs, and a strict CSP, so no inline script or style.
+  - **Measured memory** (`docker stats`, 2026-10-25):
+    - app: ~0.8 GB serving with bge-m3 loaded, ~1.1 GB peak during the first-start ingest
+    - Postgres: ~75 MB
+    - image: 3.3 GB
+  - **Next: Step 3 (deploy).**
+    - **Target:** EC2 **t3.small** (2 GB) in **us-east-2**.
+    - **Domain:** `shomasawa.com`, registered at **Cloudflare** with DNS in Cloudflare. Route 53 registration failed on the new AWS account (Settings project account), so manage DNS in Cloudflare, not Route 53.
+    - **Demo URL:** `https://demo.shomasawa.com`.
 
 ## Backlog (not started)
 - **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.
