@@ -161,7 +161,7 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 | `POST /chat` `{tenant, message}` | `200 {answer, behavior, sources}`. If the pipeline fails, a staff-handoff answer |
 | | `404` unknown tenant · `422` empty message or over `MAX_MESSAGE_CHARS` · `429` per-IP limit (with `Retry-After`) |
 | | Daily question cap or token budget used up: `200` with 「…お電話またはLINEにて当院へ直接お問い合わせください。」, `behavior: handoff`; the LLM is not called |
-| `GET /health` | `200 {status, db, model}`, or `503` if the database is unreachable |
+| `GET /health` | `200 {status, db, model, version, git_sha}` (`version`/`git_sha` come from the image build args; `dev`/`unknown` locally), or `503` if the database is unreachable |
 | `GET /` | The web chat (below) |
 | `GET /api/config` | `{tenant, clinic_name, doc_labels, max_message_chars, demo_autosend}` for the page |
 

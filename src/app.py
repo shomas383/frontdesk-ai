@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import time
 from collections.abc import Callable
@@ -46,6 +47,12 @@ RATE_LIMITED_DETAIL = "ただいまご質問が集中しております。恐れ
 EMPTY_MESSAGE_DETAIL = "ご質問を入力してください。"
 
 request_log = logging.getLogger("frontdesk.requests")
+
+
+def build_info() -> dict[str, str]:
+    """The release this process runs, baked into the image by the Dockerfile's build args."""
+    return {"version": os.getenv("APP_VERSION", "dev"), "git_sha": os.getenv("GIT_SHA", "unknown")}
+
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 # Everything the page needs is same-origin and none of it is inline, so the CSP can be strict.
@@ -110,7 +117,8 @@ def create_app(
             usage.ensure_schema(conn)
             if warm:  # load bge-m3 now rather than on the first customer question
                 warm_up(conn, settings.allowed_tenants[0], "dense")
-        log_event(event="startup", model=app.state.provider.model_id, prompt_hash=prompt_hash(),
+        log_event(event="startup", **build_info(), model=app.state.provider.model_id,
+                  prompt_hash=prompt_hash(),
                   tenants=list(settings.allowed_tenants), max_message_chars=settings.max_message_chars,
                   rate_limit_per_minute=settings.rate_limit_per_minute,
                   rate_limit_per_day=settings.rate_limit_per_day,
@@ -161,7 +169,7 @@ def create_app(
         except Exception:
             db_status = "error"
         body = {"status": "ok" if db_status == "ok" else "degraded", "db": db_status,
-                "model": app.state.provider.model_id}
+                "model": app.state.provider.model_id, **build_info()}
         return JSONResponse(body, status_code=200 if db_status == "ok" else 503)
 
     @app.post("/chat", response_model=ChatResponse)

@@ -119,11 +119,23 @@ def test_chat_response_shape(retrieved):
                           "sources": ["01_menu_prices"]}
 
 
-def test_health():
+def test_health(monkeypatch):
+    monkeypatch.delenv("APP_VERSION", raising=False)
+    monkeypatch.delenv("GIT_SHA", raising=False)
     with make_client() as client:
         res = client.get("/health")
     assert res.status_code == 200
-    assert res.json() == {"status": "ok", "db": "ok", "model": "claude-haiku-5-5"}
+    assert res.json() == {"status": "ok", "db": "ok", "model": "claude-haiku-5-5",
+                          "version": "dev", "git_sha": "unknown"}
+
+
+def test_health_reports_the_release(monkeypatch):
+    # The deploy workflow waits until /health shows the tag it just pushed.
+    monkeypatch.setenv("APP_VERSION", "v0.4.0")
+    monkeypatch.setenv("GIT_SHA", "abc1234")
+    with make_client() as client:
+        body = client.get("/health").json()
+    assert (body["version"], body["git_sha"]) == ("v0.4.0", "abc1234")
 
 
 def test_app_uses_the_eval_defaults(retrieved, monkeypatch):
