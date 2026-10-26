@@ -4,27 +4,50 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# TODO(you): the security group for the instance. compute.tf already uses aws_security_group.web.id,
-# so `terraform validate` fails until this exists.
-#
-# What it must do:
-#   - Live in the default VPC (data.aws_vpc.default.id).
-#   - Inbound TCP 80 from anywhere: Let's Encrypt's HTTP-01 challenge, and Caddy's redirect to HTTPS.
-#   - Inbound TCP 443 from anywhere: the site itself (Caddy can also pass the TLS-ALPN challenge here).
-#   - Nothing else inbound. In particular no 22: shell access goes through SSM Session Manager, which
-#     works over the agent's *outbound* connection, so no inbound port is needed for it.
-#   - Outbound to anywhere. The host and containers call out to ghcr.io (image pulls), Anthropic's API,
-#     SSM / Parameter Store, CloudWatch Logs, Let's Encrypt, and the dnf repositories.
-#
-# How to write it (AWS provider 6):
-#   - resource "aws_security_group" "web" { name, description, vpc_id }, with no inline rules.
-#   - One resource per rule: aws_vpc_security_group_ingress_rule (security_group_id, cidr_ipv4,
-#     ip_protocol = "tcp", from_port, to_port) and aws_vpc_security_group_egress_rule
-#     (ip_protocol = "-1" means all protocols; ports are then omitted).
-#   - Prefer these separate rule resources over inline ingress/egress blocks: each rule gets its own ID
-#     and description, and mixing the two styles makes Terraform fight itself.
-#   - Note: Terraform removes AWS's default "allow all outbound" rule from groups it creates, so the
-#     egress rule has to be written explicitly.
-#
-# Check afterwards: `terraform plan` lists the group plus 3 rules; in the console,
-# EC2 → Security Groups → <name>-web → Inbound rules shows exactly 80 and 443.
+# The firewall around the server. A security group is "deny everything" by
+# default; each rule below opens one specific path.
+resource "aws_security_group" "web" {
+  name        = "${var.name}-web"
+  description = "Public HTTP/HTTPS to Caddy. No SSH: shell access is via SSM Session Manager."
+  vpc_id      = data.aws_vpc.default.id # the account's default network in us-east-2
+
+  tags = {
+    Name = "${var.name}-web" # the name shown in the console's list view
+  }
+}
+
+# Port 80 (HTTP) from anywhere. Needed for two reasons:
+# 1) Let's Encrypt checks we own the domain by fetching a file over port 80 (HTTP-01).
+# 2) Caddy redirects plain http:// visitors to https://.
+resource "aws_vpc_security_group_ingress_rule" "http" {
+  security_group_id = aws_security_group.web.id
+  description       = "HTTP: ACME challenge + redirect to HTTPS"
+  cidr_ipv4         = "0.0.0.0/0" # 0.0.0.0/0 = every IPv4 address
+  ip_protocol       = "tcp"
+  from_port         = 80 # from/to is a port RANGE; same number = one port
+  to_port           = 80
+}
+
+# Port 443 (HTTPS) from anywhere: the actual website traffic.
+resource "aws_vpc_security_group_ingress_rule" "https" {
+  security_group_id = aws_security_group.web.id
+  description       = "HTTPS: the demo site"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+}
+
+# Everything outbound. The console adds this automatically, but Terraform
+# REMOVES that default, so without this rule the server couldn't reach
+# GHCR (images), Anthropic (LLM), SSM (Session Manager), CloudWatch (logs),
+# Let's Encrypt (certs) or the package mirrors.
+resource "aws_vpc_security_group_egress_rule" "all" {
+  security_group_id = aws_security_group.web.id
+  description       = "All outbound"
+  cidr_ipv4         = "0.0.0.0/0"
+  ip_protocol       = "-1" # -1 = all protocols; ports must be omitted
+}
+
+# No port 22 on purpose: Session Manager works by the SSM agent on the server
+# connecting OUT to AWS, so no inbound port is needed for shell access.

@@ -8,29 +8,29 @@
 # need braces, double the dollar sign ($$ then {VAR}) and Terraform emits a single one.
 set -euxo pipefail
 
-# --- 1. Swap ------------------------------------------------------------------------------------------
-# TODO(you): a 2 GB swap file, active now and after every reboot.
-#
-# Why: 2 GB of RAM holds the app (~0.8 GB serving, ~1.1 GB while ingest embeds every chunk), Postgres
-# (~75 MB), Caddy, dockerd, the SSM agent and the OS. The ingest peak is the tight moment (it runs on
-# every deploy). Swap is headroom so that moment slows down instead of the kernel's OOM killer
-# picking a process; low swappiness keeps it out of the way the rest of the time.
-#
-# Steps (each is one command):
-#   1. Create /swapfile of 2 GiB. `fallocate -l 2G` is instant; `dd if=/dev/zero bs=1M count=2048` also
-#      works and is the fallback if fallocate is ever refused.
-#   2. chmod 600 it: swap can contain secrets from memory, and swapon warns about insecure permissions.
-#   3. mkswap it, then swapon it.
-#   4. Append a line to /etc/fstab so it comes back after reboots and stop/start:
-#      "<file> none swap defaults 0 0".
-#   5. Set vm.swappiness=10: a file in /etc/sysctl.d/ (e.g. 99-swap.conf) makes it permanent;
-#      `sysctl -p <that file>` (or `sysctl --system`) applies it now.
-#
-# This script only runs once, but writing it so a second run doesn't add a second fstab line is a good
-# habit (e.g. only create the file if `swapon --show` doesn't list it).
-#
-# Check (Session Manager shell): `free -h` shows Swap 2.0Gi; `swapon --show`; `sysctl vm.swappiness` is 10;
-# `grep swap /etc/fstab`.
+# --- 1. Swap: 2 GB safety net for memory peaks (ingest + Docker on a 2 GB box) ---------------------
+# Runs as root at first boot, so no sudo. Guarded so a second run is harmless. First, so the headroom
+# exists before Docker and the deploy timer start anything heavy.
+# Swap is a nice-to-have: if a step fails, warn and continue rather than let `set -e` abort the boot
+# (no Docker, no timer). The steps are chained with && because bash ignores `set -e` inside a
+# command whose status is tested (left of ||, or an if condition).
+if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
+  if fallocate -l 2G /swapfile &&   # reserve a 2 GB file on disk (instant)
+     chmod 600 /swapfile &&        # root-only: swap can hold copies of memory, incl. secrets
+     mkswap /swapfile &&           # format the file as swap space
+     swapon /swapfile; then        # start using it now
+    grep -q '^/swapfile ' /etc/fstab ||
+      echo '/swapfile none swap defaults 0 0' >> /etc/fstab   # ...and after every reboot
+  else
+    echo "WARNING: swap setup failed; continuing without swap" >&2
+    rm -f /swapfile
+  fi
+fi
+
+# Swappiness 0-100: how strongly the kernel prefers swapping process memory over dropping file cache
+# when it needs RAM. Default 60; 10 keeps swap as an emergency buffer, not normal operation.
+echo 'vm.swappiness=10' > /etc/sysctl.d/99-swap.conf   # persists across reboots
+sysctl -p /etc/sysctl.d/99-swap.conf                    # apply now
 
 # --- 2. Docker and the Compose plugin ---------------------------------------------------------------
 dnf install -y docker
