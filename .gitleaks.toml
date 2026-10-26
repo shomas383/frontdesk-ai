@@ -1,0 +1,11 @@
+# gitleaks (run by .github/workflows/test.yml over the full history): the default rules plus one
+# narrow allowlist.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Corpus doc IDs in eval questions and runs (e.g. 11_column_aftercare in doc_ids lists) trip generic-api-key"
+condition = "AND"
+paths = ['''^eval/''']
+regexTarget = "secret"
+regexes = ['''^[0-9]{2}_[a-z0-9_]+$''']

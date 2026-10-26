@@ -1,0 +1,100 @@
+# Release on a v* tag: test → build and push ghcr.io/shomas383/frontdesk-ai:<tag> → move :prod to it →
+# wait until the site reports the new version → smoke test.
+#
+# GitHub never touches AWS (this account can't have an OIDC provider). The EC2 host polls :prod every
+# 2 minutes and deploys a new digest itself (infra/host/pull-deploy.sh), rolling back if it fails.
+#
+# Rollback: open an older tag's run of this workflow and "Re-run all jobs". Its image already exists,
+# so the build is skipped and :prod moves back; the host follows within ~2 minutes.
+name: deploy
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+# One release at a time; a newer tag waits for the running one instead of cancelling it.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/shomas383/frontdesk-ai # must match image_repo in infra/variables.tf
+  SITE: https://demo.shomasawa.com
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write # push to GHCR with GITHUB_TOKEN; the only job that can
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether this tag is already built (re-run = rollback)
+        id: image
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if docker buildx imagetools inspect "$IMAGE:$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "$IMAGE:$TAG already exists; skipping the build"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        if: steps.image.outputs.exists == 'false'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.ref_name }}
+          # Shown by GET /health; the smoke job waits for this version.
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+            GIT_SHA=${{ steps.image.outputs.short_sha }}
+          # A single image manifest (no provenance index), so the host's digest is the image's.
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Point :prod at this release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: docker buildx imagetools create --tag "$IMAGE:prod" "$IMAGE:$TAG"
+
+  smoke:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # Up to 20 minutes for the host's timer (2 min), the pull, the ingest and the model load. A
+      # first release also needs the GHCR package to be public before the host can pull it.
+      - name: Wait for the release, then ask 3 questions
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python deploy/smoke.py "$SITE" --expect-version "$TAG" --timeout 1200

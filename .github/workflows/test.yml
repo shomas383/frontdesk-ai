@@ -1,0 +1,51 @@
+# Unit tests and a secret scan on every PR and push to main; deploy.yml calls it before a release.
+# Third-party actions are pinned by full commit SHA (the version is in the comment).
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+# Read-only token: nothing here publishes anything (only deploy.yml may push to GHCR).
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      # CPU-only torch first (as in the Dockerfile), so sentence-transformers doesn't pull the CUDA build.
+      # The tests need no database, API key or model download.
+      - name: Install dependencies
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -r requirements.txt
+      - run: pytest -q
+
+  gitleaks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the whole history, not just this push
+          persist-credentials: false
+      # The gitleaks CLI image, pinned by digest. (gitleaks-action only scans the pushed range on push
+      # events and needs a license for organization repos.) .gitleaks.toml = default rules + one
+      # narrow allowlist for corpus doc IDs in eval/.
+      - name: Scan the full git history for secrets
+        run: |
+          docker run --rm -v "$PWD:/repo" \
+            zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo --config /repo/.gitleaks.toml --redact --no-banner -v
