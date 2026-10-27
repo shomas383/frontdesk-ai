@@ -34,9 +34,9 @@ variable "deploy_tag" {
 }
 
 variable "instance_type" {
-  description = "2 GB is enough for app (~0.8 GB, ~1.1 GB peak during ingest) + Postgres + Caddy, with 2 GB swap as headroom."
+  description = "4 GB, so the app (~0.7 GB) and bge-m3's ~1.1 GB of memory-mapped weights both stay in RAM. On a 2 GB t3.small the weights were re-read from EBS on every question (~9 s at gp3's 125 MB/s)."
   type        = string
-  default     = "t3.small"
+  default     = "t3.medium"
 }
 
 variable "root_volume_gb" {

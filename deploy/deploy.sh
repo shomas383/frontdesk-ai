@@ -84,7 +84,7 @@ if [ "$caddy_sum" != "$(cat "$FRONTDESK_HOME/caddyfile.sha256" 2>/dev/null || tr
     echo "$caddy_sum" >"$FRONTDESK_HOME/caddyfile.sha256"
 fi
 
-# Wait for the app's healthcheck (ingest + model load take a few minutes on a t3.small).
+# Wait for the app's healthcheck (ingest + model load take a few minutes).
 app=$(compose ps -q app)
 [ -n "$app" ] || fail "app container not found"
 deadline=$(($(date +%s) + HEALTH_TIMEOUT))

@@ -179,7 +179,7 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 - **App:** about 0.8 GB resident while serving, with bge-m3 loaded and ~1.6 s per question. The peak is about 1.1 GB, while embedding all chunks during the first-start ingest.
 - **Postgres:** about 75 MB.
 - **Image:** 3.3 GB, with CPU-only torch and bge-m3 baked in.
-- **Sizing:** a 2 GB instance is enough for the demo.
+- **Sizing:** the demo needs a 4 GB instance. Resident memory alone would fit in 2 GB, but bge-m3's weights (~1.1 GB) are memory-mapped and also need room in the page cache (see [Resize to t3.medium](#resize-to-t3medium-2026-10-27)).
 
 ### Web chat
 
@@ -212,12 +212,12 @@ Each request is logged as one JSON line on stdout:
 
 ## Deploy (AWS)
 
-The demo runs at **https://demo.shomasawa.com** on one EC2 instance, a t3.small in us-east-2 with 2 GB RAM. The instance runs `deploy/compose.prod.yml`: Caddy for HTTPS, then the app, then Postgres with pgvector. Terraform in [infra/](infra/) defines the AWS side. A git tag starts a release.
+The demo runs at **https://demo.shomasawa.com** on one EC2 instance, a t3.medium in us-east-2 with 4 GB RAM. The instance runs `deploy/compose.prod.yml`: Caddy for HTTPS, then the app, then Postgres with pgvector. Terraform in [infra/](infra/) defines the AWS side. A git tag starts a release.
 
 ```mermaid
 flowchart LR
   visitor([Browser]) -- "DNS: Cloudflare, DNS only" --> eip[Elastic IP]
-  subgraph ec2["EC2 t3.small · Amazon Linux 2023 · SG: 80/443 only"]
+  subgraph ec2["EC2 t3.medium · Amazon Linux 2023 · SG: 80/443 only"]
     caddy["Caddy<br/>Let's Encrypt, HTTP→HTTPS"] --> app["app<br/>FastAPI + bge-m3, 1 worker"] --> db[("Postgres + pgvector")]
     timer["frontdesk-deploy.timer<br/>every 2 min"] -. "new :prod digest → deploy.sh" .-> app
   end
@@ -231,7 +231,7 @@ flowchart LR
 ```
 
 **Why it's built this way:**
-- **One small box.** The app needs about 0.8 GB, rising to about 1.1 GB during ingest, and Postgres about 75 MB. A 2 GB instance with a 2 GB swap file fits. A load balancer, NAT gateway or managed database would cost more than the whole instance.
+- **One small box.** The app needs about 0.8 GB, rising to about 1.1 GB during ingest, and Postgres about 75 MB. The memory-mapped model weights (~1.1 GB) must also stay in the page cache, so the box is 4 GB, with a 2 GB swap file as a safety net. A load balancer, NAT gateway or managed database would cost more than the whole instance.
 - **The deploy is pull-based.** This account belongs to an AWS Settings project. Its fixed SCP denies `iam:*Provider*`, so GitHub Actions can't use OIDC to reach AWS, and long-lived AWS keys in GitHub are ruled out. Instead, GitHub only publishes the image, and the host deploys itself. GitHub holds no AWS credentials of any kind.
 - **DNS only (grey cloud).** Visitors connect straight to Caddy, which gets its own certificate. The app sees the real client IP through `X-Forwarded-For` (`TRUST_PROXY_HEADERS=true`) for the per-IP limit. Caddy overwrites any client-sent value, and the app port isn't published, so the header can't be spoofed.
 - **No SSH.** The security group opens only ports 80 and 443. Shell access goes through SSM Session Manager.
@@ -248,14 +248,14 @@ flowchart LR
 
 | | $/month (us-east-2 on-demand) |
 |---|---|
-| EC2 t3.small, standard CPU credits (no unlimited-mode surcharges) | ~15.20 |
+| EC2 t3.medium, standard CPU credits (no unlimited-mode surcharges) | ~30.35 |
 | EBS gp3 30 GB | 2.40 |
 | Public IPv4 (Elastic IP) | 3.65 |
 | CloudWatch Logs, Parameter Store (standard), Session Manager, GHCR (public package), Cloudflare DNS | ~0 |
-| **Total while running** | **≈ 21.40** |
+| **Total while running** | **≈ 36.50** |
 | While stopped (EBS + IP) | ≈ 6.05 |
 
-Anthropic usage is capped separately by the daily limits, at roughly $0.25/day at most. The AWS account has a $50/month budget alert and a $50 project spend limit; near that limit, AWS applies a deny SCP.
+Anthropic usage is capped separately by the daily limits, at roughly $0.25/day at most. The AWS account has a $50/month budget alert and a $50 project spend limit; near that limit, AWS applies a deny SCP. Running all month leaves about $13.50 of margin under that limit. The t3.small cost ~15.20, or ≈ 21.40 in total, but was too slow (see [Resize to t3.medium](#resize-to-t3medium-2026-10-27)).
 
 ### One-time setup
 
@@ -282,7 +282,7 @@ git tag v0.4.1 && git push origin v0.4.1
 
 **To roll back on purpose**, open an older tag's run of `deploy.yml` and choose **Re-run all jobs**. Its image already exists, so the build is skipped, `:prod` moves back, and the host follows. This was verified on the live site (v0.4.1 → v0.4.0 → v0.4.1).
 
-The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. On the t3.small that's about 1.5 minutes of HTTP 502 from Caddy, plus the image pull before it. A release that changes the large layers (torch, the model) takes about 4 minutes to pull.
+The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. Measured on the t3.small, that's about 1.5 minutes of HTTP 502 from Caddy, plus the image pull before it. A release that changes the large layers (torch, the model) takes about 4 minutes to pull.
 
 **Digests:** `:<tag>` is the image manifest. Until v0.4.0, `:prod` was a one-entry OCI index wrapping that manifest, created by `imagetools create`. So the host's `history.log` showed a different digest for the same image: for v0.4.0, index `sha256:287055d1…` wraps manifest `sha256:49c64a9a…`. From v0.4.1, `deploy.yml` copies the manifest as-is (`--prefer-index=false`), so the host records the tag's own digest.
 
@@ -297,8 +297,24 @@ The site is down while the app restarts on each deploy, as it ingests the docs a
 | Memory after deploy | `free -h`: 968 Mi used of 1.9 Gi, 868 Mi buff/cache, 761 Mi available; swap 99 Mi used of 2.0 Gi. `docker stats`: app 931 MiB, db 43 MiB, caddy 18 MiB |
 | Per-IP limit | 11 parallel `POST /chat` from one IP: 10× 200 and 1× 429 (`Retry-After: 51`). A person in a browser can't trigger it, since each answer takes several seconds |
 | Stop / start | Back ~2.5 min after start (boot, ingest, uvicorn), with no redeploy; same Elastic IP, certificate still valid |
-| Answer latency | 8–9 s (sometimes 5–7 s), compared with 1.45 s median locally (LLM 1.30 s + everything else 0.15 s, over 210 eval rows). CPU credits are ruled out: balance ~38 and rising, CPU 2–3% when idle. The cause is under investigation (query below) |
+| Answer latency | 8–9 s (sometimes 5–7 s), compared with 1.45 s median locally (LLM 1.30 s + everything else 0.15 s, over 210 eval rows). CPU credits are ruled out: balance ~38 and rising, CPU 2–3% when idle. Root cause: the model weights were re-read from disk on every question (see [Resize to t3.medium](#resize-to-t3medium-2026-10-27)) |
 | Rollback test (with v0.4.1) | Passed. The host's `history.log` digest for v0.4.1 equals the GHCR `:v0.4.1` digest (the `--prefer-index=false` fix). Re-running the v0.4.0 run brought back `/health` `v0.4.0` (`f39cef3`); re-running the v0.4.1 run restored `v0.4.1` (`0a1be25`) |
+
+#### Resize to t3.medium (2026-10-27)
+
+On the t3.small, almost all of the answer time was spent outside the LLM:
+- The Logs Insights latency split (below), over 2 days and 31 answered questions, gave median total 10,268 ms, median LLM 1,482 ms and median everything else 8,771 ms.
+- `vmstat 1` during one question showed disk reads (`bi`) of 120k–230k KB/s for about 9 s, I/O wait (`wa`) of 43–65%, and low user CPU.
+
+The app's process memory (~0.7 GB) and bge-m3's memory-mapped `model.safetensors` (~1.1 GB read per question) didn't both fit in RAM on a 2 GB box. The kernel dropped the weights from the page cache between questions, so every embedding re-read them from EBS. That read is capped by gp3's 125 MB/s baseline: 1.1 GB ÷ 125 MB/s ≈ 9 s.
+
+The fix is the 4 GB t3.medium (`instance_type` in `infra/variables.tf`). Terraform changes the type in place (stop, modify, start), keeping the instance, its volume and the Elastic IP.
+
+| | t3.small (before) | t3.medium (after) |
+|---|---|---|
+| Latency split, median total / LLM / other | 10,268 / 1,482 / 8,771 ms (n=31) | pending |
+| `vmstat` during a question | `bi` 120k–230k KB/s for ~9 s, `wa` 43–65% | pending |
+| `free -h` | 968 Mi used of 1.9 Gi, 99 Mi swap | pending |
 
 ### Operating it
 

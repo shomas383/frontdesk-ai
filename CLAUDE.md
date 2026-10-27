@@ -41,11 +41,14 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
       - Caddy's log filter also deletes the top-level `remote`, `remote_ip` and `client_ip` fields
       - `/models/xet/logs` is removed in the image
       - `:prod` copies the manifest (`--prefer-index=false`)
-    - **Open (latency investigation): prod answers take 8–9 s, against 1.45 s locally** (LLM 1.30 s + other 0.15 s, from eval rows). CPU credits are ruled out.
-      - First, split prod latency with the README's Logs Insights query.
-      - The suspect is page-cache pressure. bge-m3's working set (~0.7 GB anonymous + ~1.3 GB of memory-mapped `model.safetensors`) is close to the box's 1.9 Gi. Docker Desktop doesn't reproduce it, because the mapped file isn't charged to the container.
-      - The image also carries an apparently unused second copy of the weights (`pytorch_model.bin`, 2.27 GB, in another snapshot).
-    - **Target:** EC2 **t3.small** (2 GB, 2 GB swap) in **us-east-2**, running Docker Compose: Caddy → app → Postgres/pgvector.
+    - **Latency: root cause found (page-cache thrash); fix applied in Terraform, verification pending.**
+      - On the t3.small, prod answers took ~10 s, against 1.45 s locally.
+      - Logs Insights split (n=31): median total 10,268 ms, LLM 1,482 ms, other 8,771 ms.
+      - `vmstat` during a question showed `bi` 120k–230k KB/s for ~9 s and `wa` 43–65%. bge-m3's memory-mapped weights (~1.1 GB) were re-read from EBS on every query, capped by gp3's 125 MB/s.
+      - Docker Desktop doesn't reproduce it, because the mapped file isn't charged to the container.
+      - **Fix:** `instance_type` default `t3.medium` (in-place stop/modify/start). After apply, re-run the latency split, `vmstat` and `free -h`, then fill in the README table "Resize to t3.medium".
+      - Still open: the image carries an apparently unused second copy of the weights (`pytorch_model.bin`, 2.27 GB, in another snapshot).
+    - **Target:** EC2 **t3.medium** (4 GB, 2 GB swap) in **us-east-2**, running Docker Compose: Caddy → app → Postgres/pgvector. It was t3.small (2 GB) until 2026-10-27.
     - **Domain:** `shomasawa.com`, registered at **Cloudflare**, with DNS in Cloudflare (a DNS-only A record managed by Terraform). Don't use Route 53; registering the domain there failed on this account.
     - **Demo URL:** `https://demo.shomasawa.com`.
     - **Deploy is pull-based:**
