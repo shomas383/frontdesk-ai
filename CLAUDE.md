@@ -26,7 +26,21 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - app: ~0.8 GB serving with bge-m3 loaded, ~1.1 GB peak during the first-start ingest
     - Postgres: ~75 MB
     - image: 3.3 GB
-  - **Step 3 (deploy): code done; first release v0.4.0 in progress.** See README "Deploy (AWS)" and [infra/README.md](infra/README.md). Fill in the README's first-release table (build time, first deploy time, memory) from the real run.
+  - **Step 3 (deploy): live at https://demo.shomasawa.com since 2026-10-27 (v0.4.0).** See README "Deploy (AWS)" (first-release table) and [infra/README.md](infra/README.md).
+    - **Verified live:**
+      - smoke test 3/3
+      - per-IP 429 after 10 requests
+      - stop/start recovers in ~2.5 min with no redeploy
+      - no visitor IPs in CloudWatch
+      - memory: 968 Mi used of 1.9 Gi, 99 Mi swap
+    - **Next: v0.4.1**, which doubles as the rollback test:
+      - Caddy's log filter also deletes the top-level `remote`, `remote_ip` and `client_ip` fields
+      - `/models/xet/logs` is removed in the image
+      - `:prod` copies the manifest (`--prefer-index=false`)
+    - **Open: prod answers take 8–9 s, against 1.45 s locally** (LLM 1.30 s + other 0.15 s, from eval rows). CPU credits are ruled out.
+      - First, split prod latency with the README's Logs Insights query.
+      - The suspect is page-cache pressure. bge-m3's working set (~0.7 GB anonymous + ~1.3 GB of memory-mapped `model.safetensors`) is close to the box's 1.9 Gi. Docker Desktop doesn't reproduce it, because the mapped file isn't charged to the container.
+      - The image also carries an apparently unused second copy of the weights (`pytorch_model.bin`, 2.27 GB, in another snapshot).
     - **Target:** EC2 **t3.small** (2 GB, 2 GB swap) in **us-east-2**, running Docker Compose: Caddy → app → Postgres/pgvector.
     - **Domain:** `shomasawa.com`, registered at **Cloudflare**, with DNS in Cloudflare (a DNS-only A record managed by Terraform). Don't use Route 53; registering the domain there failed on this account.
     - **Demo URL:** `https://demo.shomasawa.com`.
@@ -38,8 +52,9 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 
 ## Backlog (not started)
 - **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.
+  - Reproduced live on 2026-10-27: 「平日の営業時間は？」 ended with 「詳しくはお気軽にお問い合わせください」.
   - Candidate prompt fix, measured as its own step (commit + 3 repeats on both sets).
-  - Also count answer-behavior rows that contain handoff phrases.
+  - Also count answer-behavior rows that contain handoff phrases, including 「お気軽にお問い合わせ」.
   - Check that real handoffs (q36/q54/q64) and medical redirects don't regress.
 
 ## Default pipeline

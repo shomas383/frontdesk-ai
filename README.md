@@ -282,18 +282,23 @@ git tag v0.4.1 && git push origin v0.4.1
 
 **To roll back on purpose**, open an older tag's run of `deploy.yml` and choose **Re-run all jobs**. Its image already exists, so the build is skipped, `:prod` moves back, and the host follows.
 
-The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. That took about 50 s locally; the t3.small figure goes in the table below. Caddy answers 502 in the meantime.
+The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. On the t3.small that's about 1.5 minutes of HTTP 502 from Caddy, plus the image pull before it. A release that changes the large layers (torch, the model) takes about 4 minutes to pull.
 
-**First release (v0.4.0):** _to be filled in from the real run._
+**Digests:** `:<tag>` is the image manifest. Until v0.4.0, `:prod` was a one-entry OCI index wrapping that manifest, created by `imagetools create`. So the host's `history.log` showed a different digest for the same image: for v0.4.0, index `sha256:287055d1…` wraps manifest `sha256:49c64a9a…`. From v0.4.1, `deploy.yml` copies the manifest as-is (`--prefer-index=false`), so the host records the tag's own digest.
+
+**First release (v0.4.0, 2026-10-27):**
 
 | | |
 |---|---|
-| Build + push, cold cache (`publish` job) | _TBD_ |
-| Image size on GHCR | _TBD_ |
-| `:prod` moved → `/health` reports v0.4.0 (timer + pull + ingest + model load) | _TBD_ |
-| Smoke test (3 questions) | _TBD_ |
-| Rebuild with warm cache (next tag, code-only change) | _TBD_ |
-| Memory on the host after deploy (`free -h`, swap used) | _TBD_ |
+| Build + push, cold cache (`publish` job) | 14 min 55 s |
+| Image size | ~3.26 GB |
+| `:prod` moved → `/health` reports v0.4.0 | ~6 min once the GHCR package was public. The first smoke run timed out after 20 min because the package was still private; after making it public and re-running the smoke job, the stages were: ~4 min connection refused (image pull), one TLS alert (certificate being issued), ~1.5 min HTTP 502 (ingest + model load), then healthy. The smoke step took 6 min 18 s |
+| Smoke test | 3/3 passed: q01 `answer` citing `01_menu_prices`, `07_news`; q36 `handoff`; q44 `refuse_redirect` |
+| Memory after deploy | `free -h`: 968 Mi used of 1.9 Gi, 868 Mi buff/cache, 761 Mi available; swap 99 Mi used of 2.0 Gi. `docker stats`: app 931 MiB, db 43 MiB, caddy 18 MiB |
+| Per-IP limit | 11 parallel `POST /chat` from one IP: 10× 200 and 1× 429 (`Retry-After: 51`). A person in a browser can't trigger it, since each answer takes several seconds |
+| Stop / start | Back ~2.5 min after start (boot, ingest, uvicorn), with no redeploy; same Elastic IP, certificate still valid |
+| Answer latency | 8–9 s (sometimes 5–7 s), compared with 1.45 s median locally (LLM 1.30 s + everything else 0.15 s, over 210 eval rows). CPU credits are ruled out: balance ~38 and rising, CPU 2–3% when idle. The cause is under investigation (query below) |
+| Rollback test | Planned with v0.4.1 |
 
 ### Operating it
 
@@ -306,6 +311,25 @@ The site is down while the app restarts on each deploy, as it ingests the docs a
 | Start | `aws ec2 start-instances --region us-east-2 --instance-ids <id>`. The IP, containers and certificates come back on their own; no redeploy |
 | Turn the LLM off without stopping | create `/frontdesk-ai/prod/DAILY_QUESTION_CAP` = `0`, then on the host run `sudo /opt/frontdesk/pull-deploy.sh --force` (re-renders `.env` and restarts). `/chat` then answers with the polite "please call the clinic" handoff |
 | Change a limit | the same: a parameter with the variable's name, then `pull-deploy.sh --force` |
+
+**CloudWatch Logs Insights queries** (CloudWatch → Logs Insights → log group `/frontdesk-ai/prod`; save them with **Save** to keep them in the console).
+
+*IP audit.* Lists every IPv4-shaped string in the logs, by stream. Expect only `0.0.0.0`, `127.0.0.1` and Docker's internal `172.16–31.x.x` addresses (e.g. the app container in Caddy's 502 lines during a deploy). From v0.4.1, Caddy also deletes the top-level `remote`, `remote_ip` and `client_ip` fields, which held the Let's Encrypt validators' addresses in its "served key authentication" lines. Any other address is a leak to fix. The query extracts only the first address in each line, so for a full audit also search for a specific one with `filter @message like "203.0.113.7"`.
+
+```
+parse @message /(?<ip>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/
+| filter ispresent(ip)
+| stats count(*) as lines, earliest(@timestamp) as first_seen, latest(@timestamp) as last_seen by ip, @logStream
+| sort lines desc
+```
+
+*Latency split.* Separates LLM time from everything else (embedding, DB, guardrail) for answered questions:
+
+```
+filter event = "chat" and outcome = "answered"
+| fields latency_ms - llm_latency_ms as other_ms
+| stats count(*) as n, pct(latency_ms, 50) as total_p50, pct(llm_latency_ms, 50) as llm_p50, pct(other_ms, 50) as other_p50, pct(latency_ms, 90) as total_p90 by bin(1d)
+```
 
 ## Milestone 1 — Baseline RAG pipeline and evaluation harness
 
@@ -422,7 +446,7 @@ Hybrid search and reranking were tried in M2. They remain available as `--retrie
 
 ### Backlog
 
-- **Unneeded staff follow-up on fully answered questions.** When the official docs fully answer a question, the bot sometimes still adds 「スタッフが確認のうえご案内」. For example, it corrects a blog's 6,600円 to the current 7,150円 and then defers to staff anyway, which makes a correct answer sound uncertain. Seen in the web-chat screenshots (2026-10-25), where `behavior` stayed `answer`.
+- **Unneeded staff follow-up on fully answered questions.** When the official docs fully answer a question, the bot sometimes still adds 「スタッフが確認のうえご案内」. For example, it corrects a blog's 6,600円 to the current 7,150円 and then defers to staff anyway, which makes a correct answer sound uncertain. Seen in the web-chat screenshots (2026-10-25), where `behavior` stayed `answer`. Reproduced on the live site (2026-10-27): 「平日の営業時間は？」 ended with 「詳しくはお気軽にお問い合わせください」.
   - Candidate fix: a prompt rule that tells the model not to add a handoff sentence when the cited official docs answer the question completely.
   - Check it with a 3-repeat eval on both question sets, plus a count of answer-behavior rows that contain a handoff phrase.
   - Watch that it doesn't suppress real handoffs (q36, q54, q64) or the medical redirects.
