@@ -2,7 +2,7 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — local API and web chat done.** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
+**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — API, web chat and the AWS deploy pipeline done ([Deploy](#deploy-aws)).** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
 
 ## How it works
 
@@ -31,6 +31,9 @@ question ──bge-m3──▶ top-5 cosine (+ full doc for short docs) ──�
 | [src/llm.py](src/llm.py) | Provider interface (`LLM_PROVIDER=anthropic` or `bedrock`) |
 | [src/eval.py](src/eval.py), [src/metrics.py](src/metrics.py) | Eval runner and pure metric functions |
 | [src/app.py](src/app.py), [src/limits.py](src/limits.py), [src/usage.py](src/usage.py), [src/redact.py](src/redact.py) | HTTP API (see [API](#api-local)); per-IP rate limiter; daily cap/token budget in Postgres; phone/email redaction for logs |
+| [deploy/](deploy/) | Production compose file (Caddy + app + pgvector), Caddyfile, `deploy.sh`, `smoke.py`; shipped inside the image |
+| [infra/](infra/) | Terraform for the EC2 host and DNS record, plus the host's pull-based deploy ([infra/README.md](infra/README.md)) |
+| [.github/workflows/](.github/workflows/) | `test.yml` (pytest + gitleaks on PRs and `main`), `deploy.yml` (a `v*` tag publishes a release) |
 
 ## Setup (Windows / PowerShell)
 
@@ -204,7 +207,105 @@ Each request is logged as one JSON line on stdout:
 
 **Retention:**
 - **Locally:** logs exist only in the container's Docker log (`docker compose logs app`) and are deleted with the container.
-- **On AWS (M4 deploy step):** logs go to a CloudWatch log group with a fixed retention of 30 days. Usage counters in `usage_daily` hold only per-day totals.
+- **On AWS:** every container (app, Postgres, Caddy) logs to the CloudWatch log group `/frontdesk-ai/prod` through Docker's awslogs driver. The group has a fixed retention of 30 days (`infra/logs.tf`). Usage counters in `usage_daily` hold only per-day totals.
+- **Caddy** has no access log. Its error log goes through a filter that deletes the client address and request headers. For example, a 502 during a redeploy logs the method, host and URI, but no IP.
+
+## Deploy (AWS)
+
+The demo runs at **https://demo.shomasawa.com** on one EC2 instance, a t3.small in us-east-2 with 2 GB RAM. The instance runs `deploy/compose.prod.yml`: Caddy for HTTPS, then the app, then Postgres with pgvector. Terraform in [infra/](infra/) defines the AWS side. A git tag starts a release.
+
+```mermaid
+flowchart LR
+  visitor([Browser]) -- "DNS: Cloudflare, DNS only" --> eip[Elastic IP]
+  subgraph ec2["EC2 t3.small · Amazon Linux 2023 · SG: 80/443 only"]
+    caddy["Caddy<br/>Let's Encrypt, HTTP→HTTPS"] --> app["app<br/>FastAPI + bge-m3, 1 worker"] --> db[("Postgres + pgvector")]
+    timer["frontdesk-deploy.timer<br/>every 2 min"] -. "new :prod digest → deploy.sh" .-> app
+  end
+  eip --> caddy
+  app -- "/chat" --> claude[Anthropic API<br/>Haiku 5.5]
+  timer -- "pull :prod" --> ghcr[(ghcr.io/shomas383/frontdesk-ai)]
+  ec2 -- "awslogs" --> cw[CloudWatch Logs<br/>30 days]
+  ec2 -- "secrets at deploy" --> ssm[Parameter Store<br/>/frontdesk-ai/prod/*]
+  gha[GitHub Actions<br/>tag v*] -- "build, push :tag, move :prod" --> ghcr
+  gha -. "smoke test" .-> caddy
+```
+
+**Why it's built this way:**
+- **One small box.** The app needs about 0.8 GB, rising to about 1.1 GB during ingest, and Postgres about 75 MB. A 2 GB instance with a 2 GB swap file fits. A load balancer, NAT gateway or managed database would cost more than the whole instance.
+- **The deploy is pull-based.** This account belongs to an AWS Settings project. Its fixed SCP denies `iam:*Provider*`, so GitHub Actions can't use OIDC to reach AWS, and long-lived AWS keys in GitHub are ruled out. Instead, GitHub only publishes the image, and the host deploys itself. GitHub holds no AWS credentials of any kind.
+- **DNS only (grey cloud).** Visitors connect straight to Caddy, which gets its own certificate. The app sees the real client IP through `X-Forwarded-For` (`TRUST_PROXY_HEADERS=true`) for the per-IP limit. Caddy overwrites any client-sent value, and the app port isn't published, so the header can't be spoofed.
+- **No SSH.** The security group opens only ports 80 and 443. Shell access goes through SSM Session Manager.
+- **Secrets stay out of git, the image and Terraform state.** `ANTHROPIC_API_KEY` and `POSTGRES_PASSWORD` are SecureString parameters, which `deploy.sh` reads at deploy time into a root-only `.env` file. The instance metadata hop limit is 1, so containers can't use the instance role.
+
+**Production settings** (`deploy/compose.prod.yml`, checked by `tests/test_deploy_files.py`):
+- `APP_TODAY=2026-10-24`, so answers match the labeled eval runs.
+- `DEMO_AUTOSEND=false`, and no CORS.
+- One uvicorn worker, with no access log.
+- A full ingest on every start, so the database always matches the docs baked into the image.
+- The Step 1 limits: 10/min and 50/day per IP; 500 questions and 2M tokens per JST day overall. Any limit can be overridden by a parameter of the same name under `/frontdesk-ai/prod/`.
+
+### Cost
+
+| | $/month (us-east-2 on-demand) |
+|---|---|
+| EC2 t3.small, standard CPU credits (no unlimited-mode surcharges) | ~15.20 |
+| EBS gp3 30 GB | 2.40 |
+| Public IPv4 (Elastic IP) | 3.65 |
+| CloudWatch Logs, Parameter Store (standard), Session Manager, GHCR (public package), Cloudflare DNS | ~0 |
+| **Total while running** | **≈ 21.40** |
+| While stopped (EBS + IP) | ≈ 6.05 |
+
+Anthropic usage is capped separately by the daily limits, at roughly $0.25/day at most. The AWS account has a $50/month budget alert and a $50 project spend limit; near that limit, AWS applies a deny SCP.
+
+### One-time setup
+
+1. **Parameters:** in Systems Manager → Parameter Store, create `/frontdesk-ai/prod/ANTHROPIC_API_KEY` and `/frontdesk-ai/prod/POSTGRES_PASSWORD`.
+   - Both are SecureString, using the default `aws/ssm` key.
+   - The password must use only letters, digits and `. _ ~ -`, because `deploy.sh` checks it.
+2. **Infrastructure:** `terraform init`, then `plan`, then `apply` in `infra/`, with a Cloudflare token limited to DNS:Edit on the zone. See [infra/README.md](infra/README.md). That file also covers backing up the local state.
+3. **First release:** run `git tag v0.4.0 && git push origin v0.4.0`.
+   - GHCR packages pushed from a private repo start out private. After that first push, set the package to **Public** (Package settings → Change visibility); the host pulls anonymously.
+   - Then re-run the failed smoke job.
+
+### Releasing and rolling back
+
+```bash
+git tag v0.4.1 && git push origin v0.4.1
+```
+
+1. **Test:** `deploy.yml` runs the tests and gitleaks.
+2. **Publish:** it builds and pushes `ghcr.io/shomas383/frontdesk-ai:v0.4.1`, with the version and git SHA baked in, then moves `:prod` to that image.
+3. **Deploy:** within 2 minutes the host's timer sees a new `:prod` digest. It copies `deploy/` out of that image and runs its `deploy.sh`. The app ingests the docs, loads the model and becomes healthy.
+4. **Smoke test:** the job waits until `/health` reports `v0.4.1`, then asks 3 eval questions (price → `answer`, gift card → `handoff`, symptom → `refuse_redirect`).
+
+**If a release fails on the host**, `pull-deploy.sh` records the digest as failed, so it isn't retried every 2 minutes, and **redeploys the previous digest automatically**. The smoke job then fails, because `/health` never reports the new version.
+
+**To roll back on purpose**, open an older tag's run of `deploy.yml` and choose **Re-run all jobs**. Its image already exists, so the build is skipped, `:prod` moves back, and the host follows.
+
+The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. That took about 50 s locally; the t3.small figure goes in the table below. Caddy answers 502 in the meantime.
+
+**First release (v0.4.0):** _to be filled in from the real run._
+
+| | |
+|---|---|
+| Build + push, cold cache (`publish` job) | _TBD_ |
+| Image size on GHCR | _TBD_ |
+| `:prod` moved → `/health` reports v0.4.0 (timer + pull + ingest + model load) | _TBD_ |
+| Smoke test (3 questions) | _TBD_ |
+| Rebuild with warm cache (next tag, code-only change) | _TBD_ |
+| Memory on the host after deploy (`free -h`, swap used) | _TBD_ |
+
+### Operating it
+
+| Task | How |
+|---|---|
+| Shell on the host | `aws ssm start-session --region us-east-2 --target <instance-id>` (`terraform output session_command`) |
+| App / Caddy / Postgres logs | CloudWatch → Log groups → `/frontdesk-ai/prod` (streams `frontdesk-app-1`, `-caddy-1`, `-db-1`) |
+| Deploy history | on the host: `journalctl -u frontdesk-deploy`, `cat /opt/frontdesk/state/history.log` |
+| Stop (≈ $6/month while stopped) | `aws ec2 stop-instances --region us-east-2 --instance-ids <id>` |
+| Start | `aws ec2 start-instances --region us-east-2 --instance-ids <id>`. The IP, containers and certificates come back on their own; no redeploy |
+| Turn the LLM off without stopping | create `/frontdesk-ai/prod/DAILY_QUESTION_CAP` = `0`, then on the host run `sudo /opt/frontdesk/pull-deploy.sh --force` (re-renders `.env` and restarts). `/chat` then answers with the polite "please call the clinic" handoff |
+| Change a limit | the same: a parameter with the variable's name, then `pull-deploy.sh --force` |
 
 ## Milestone 1 — Baseline RAG pipeline and evaluation harness
 

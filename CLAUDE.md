@@ -26,10 +26,15 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - app: ~0.8 GB serving with bge-m3 loaded, ~1.1 GB peak during the first-start ingest
     - Postgres: ~75 MB
     - image: 3.3 GB
-  - **Next: Step 3 (deploy).**
-    - **Target:** EC2 **t3.small** (2 GB) in **us-east-2**.
-    - **Domain:** `shomasawa.com`, registered at **Cloudflare** with DNS in Cloudflare. Route 53 registration failed on the new AWS account (Settings project account), so manage DNS in Cloudflare, not Route 53.
+  - **Step 3 (deploy): code done; first release v0.4.0 in progress.** See README "Deploy (AWS)" and [infra/README.md](infra/README.md). Fill in the README's first-release table (build time, first deploy time, memory) from the real run.
+    - **Target:** EC2 **t3.small** (2 GB, 2 GB swap) in **us-east-2**, running Docker Compose: Caddy → app → Postgres/pgvector.
+    - **Domain:** `shomasawa.com`, registered at **Cloudflare**, with DNS in Cloudflare (a DNS-only A record managed by Terraform). Don't use Route 53; registering the domain there failed on this account.
     - **Demo URL:** `https://demo.shomasawa.com`.
+    - **Deploy is pull-based:**
+      1. A `v*` tag builds the image and pushes it to `ghcr.io/shomas383/frontdesk-ai:<tag>`, then moves `:prod` to it.
+      2. On the host, a systemd timer polls `:prod` every 2 minutes and runs the new image's `deploy/deploy.sh`.
+      3. If that fails, it auto-rolls back to the last good digest.
+      - GitHub has no AWS credentials.
 
 ## Backlog (not started)
 - **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.
@@ -39,6 +44,15 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.
+
+## AWS account constraints (Settings project account)
+- **SCP limits:**
+  - `iam:*Provider*` is denied, so there are no OIDC or SAML providers and GitHub can't assume a role.
+  - IAM paths under `/managed/` are reserved; keep roles on path `/`.
+  - Don't turn on advanced features: it's irreversible and removes the spend limits.
+- **Spend:** a $50/month budget alert, plus a $50 project spend limit; near the limit, AWS applies a deny SCP.
+- **Bedrock** quotas started at 0, so production uses `LLM_PROVIDER=anthropic`.
+- **CLI access:** `aws login`. Terraform `plan`/`apply` and anything else that needs AWS or Cloudflare credentials are run by the user, not by Claude.
 
 ## Stack and decisions
 - LLM: Claude Haiku 5.5 (`claude-haiku-5-5`) through the provider interface in `src/llm.py`. `LLM_PROVIDER=anthropic` (default) or `bedrock`. Thinking off, effort low, max_tokens 500, structured JSON output.
@@ -55,6 +69,7 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 - PowerShell 5.1 is the main shell; Git Bash is also available.
 - Python: the conda env `frontdesk-ai` at `C:\Users\Shoma\miniconda3\envs\frontdesk-ai\python.exe`. There is no system Python on PATH, so call this path directly.
 - Set `PYTHONIOENCODING=utf-8` for Japanese output. Don't pipe JSON through PowerShell 5.1, because it adds a BOM.
+- Terraform: use the user's install, or `docker run --rm -v <infra>:/infra -w /infra hashicorp/terraform:1.17.0 fmt|validate` (no credentials needed). Set `MSYS_NO_PATHCONV=1` for `docker run` from Git Bash.
 - Multi-file patch scripts: write them to a file with the Write tool and then run them. Inline heredocs in the Bash tool can mangle backslashes (`\\r` became a carriage return once). To check for stray `\r`, read files with `newline=""`, because Python's `read_text` silently converts it.
 
 ## Repo layout
@@ -71,6 +86,10 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 | `src/limits.py`, `src/usage.py`, `src/redact.py` | per-IP rate limiter (in memory → **uvicorn must run with 1 worker**); daily question cap + token budget in Postgres `usage_daily` (JST day); phone/email redaction before logging |
 | `src/static/`, `data/<tenant>/site.json` | web chat page; `site.json` holds `clinic_name` + `doc_labels` (a test requires a label for every doc, so add one when adding a doc). `?demo=` auto-send only with `DEMO_AUTOSEND=true` |
 | `Dockerfile`, `docker-compose.yml` | CPU torch + bge-m3 baked in. `docker compose up -d` starts only the dev db; `--profile app` adds the API, which runs `ingest --if-empty` on start |
+| `deploy/` | Production stack, shipped inside the image as `/app/deploy`:<br>• `compose.prod.yml`: Caddy + app + pgvector, awslogs; only Caddy publishes ports<br>• `Caddyfile`: no access log; client IPs filtered out of the error log<br>• `deploy.sh`: renders `/opt/frontdesk/.env` from Parameter Store, runs compose up, waits for healthy<br>• `smoke.py`: `/health` version + 3 questions<br>`tests/test_deploy_files.py` checks the prod invariants and for stray `\r` |
+| `infra/` | Terraform (local state, gitignored; back it up): default VPC, SG 80/443, EC2, EIP, instance role, log group (30 d), Cloudflare record. `user_data.sh.tftpl` is the first boot (swap, Docker, Compose, timer). `infra/host/` holds `pull-deploy.sh` (lock, digest compare, failed-digest skip, auto-rollback, `--force`) and the systemd units |
+| `.github/workflows/` | `test.yml`: pytest + full-history gitleaks (`.gitleaks.toml`), contents: read. `deploy.yml`: on `v*`, test → publish to GHCR (the only job with packages: write) → smoke. Actions pinned by commit SHA |
+| `.gitattributes` | keeps Linux-run files LF in the Windows working tree (`*.sh`, `*.tftpl`, `*.yml`, Dockerfile, Caddyfile, systemd units, `deploy/**`, `infra/host/**`) |
 | `data/<tenant>/docs/` | clinic docs (source of truth for answers) |
 | `data/<tenant>/doc_meta.json`, `src/doc_meta.py` | per-doc/section `doc_type` (official, news, blog, campaign) + published/effective/valid_until dates. Always used by the guardrail on the server side. Shown to the LLM only with `--doc-meta` (off by default). Keep it in sync when docs change; a test checks coverage |
 | `eval/questions.jsonl` | the 50 original questions (q01–q50) |
@@ -86,6 +105,13 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 - **What it ignores:** "not in our documents" sentences (資料/記載), and restating that a dated campaign ended (終了…実施しておりません).
 - **How it was calibrated:** on all 980 labeled M2 answers. Before changing it, replay it offline over the labeled runs and compare its firings with the hand labels.
 
+## Production (demo.shomasawa.com)
+- **Settings:** `APP_TODAY=2026-10-24` (pinned, so answers match eval), `TRUST_PROXY_HEADERS=true` (behind Caddy), `DEMO_AUTOSEND=false`, and 1 uvicorn worker.
+- **Ingest:** runs in full on every container start, so the DB matches the docs in the image. A docs change ships as a new tag.
+- **Parameters:** secrets live in Parameter Store under `/frontdesk-ai/prod/`, created by the user. Never put them in git, the image or Terraform. A parameter named after a limit (e.g. `DAILY_QUESTION_CAP`) overrides it after `sudo /opt/frontdesk/pull-deploy.sh --force` on the host.
+- **Releases** are tags (`v0.4.0`, …). To roll back, re-run an older tag's `deploy.yml` run.
+- **Host-side changes:** `infra/host/pull-deploy.sh` and the first-boot script only reach a host through Session Manager or a new instance (`ignore_changes = [ami, user_data]`). Everything in `deploy/` ships with the image.
+
 ## Commands
 ```
 python -m src.ingest --tenant komorebi-seitai-demo [--if-empty]
@@ -96,6 +122,10 @@ python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.eval --aggregate eval/runs/<ts>_<name>.repeats.json   # after labeling repeats; no API calls
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]
 pytest
+git tag vX.Y.Z && git push origin vX.Y.Z                            # release (deploy.yml → GHCR :prod → host)
+cd infra; terraform plan -out tf.plan; terraform apply tf.plan      # user runs these (needs aws login + CLOUDFLARE_API_TOKEN)
+aws ssm start-session --region us-east-2 --target <instance-id>     # shell on the host
+aws ec2 stop-instances|start-instances --region us-east-2 --instance-ids <id>
 ```
 
 ## Eval workflow
