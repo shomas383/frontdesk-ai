@@ -56,9 +56,20 @@ def test_every_service_logs_to_cloudwatch(compose):
         assert svc["logging"]["driver"] == "awslogs", name
 
 
+def caddy_filter_deletes(caddyfile: str) -> set[str]:
+    """Field names deleted by the `format filter { ... }` block of the default logger."""
+    lines = [line.strip() for line in caddyfile.splitlines()]
+    start = lines.index("format filter {") + 1
+    end = lines.index("}", start)
+    return {line.removesuffix(" delete") for line in lines[start:end] if line.endswith(" delete")}
+
+
 def test_caddy_has_no_access_log_and_strips_client_addresses():
     caddyfile = (DEPLOY_DIR / "Caddyfile").read_text(encoding="utf-8")
-    for field in ("request>remote_ip", "request>client_ip", "request>headers"):
-        assert f"{field} delete" in caddyfile
+    deleted = caddy_filter_deletes(caddyfile)
+    # Inside the request a proxy error carries (e.g. a 502 during a redeploy).
+    assert {"request>remote_ip", "request>remote_port", "request>client_ip", "request>headers"} <= deleted
+    # At the top level, e.g. "remote" (the Let's Encrypt validator) in "served key authentication".
+    assert {"remote", "remote_ip", "client_ip"} <= deleted
     lines = [line.strip() for line in caddyfile.splitlines() if not line.strip().startswith("#")]
     assert [line for line in lines if line.startswith("log")] == ["log default {"]

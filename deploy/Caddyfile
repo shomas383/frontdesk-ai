@@ -2,6 +2,8 @@
 	# There is no access log (no `log` directive in the site below): it would record client IPs.
 	# Caddy still logs errors, and a proxy error (e.g. a 502 while the app restarts) carries the
 	# request, so strip the client address and headers before the line reaches CloudWatch.
+	# Some loggers put the peer at the top level instead (the ACME HTTP-01 handler's "served key
+	# authentication" line has "remote": the Let's Encrypt validator), so delete those names too.
 	log default {
 		output stderr
 		format filter {
@@ -9,6 +11,9 @@
 			request>remote_port delete
 			request>client_ip delete
 			request>headers delete
+			remote delete
+			remote_ip delete
+			client_ip delete
 		}
 	}
 }
