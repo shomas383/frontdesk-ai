@@ -2,7 +2,7 @@
 
 A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
 
-**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — API, web chat and the AWS deploy pipeline done ([Deploy](#deploy-aws)).** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
+**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — API, web chat and AWS deploy done; live at https://demo.shomasawa.com ([Deploy](#deploy-aws)).** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
 
 ## How it works
 
@@ -280,7 +280,7 @@ git tag v0.4.1 && git push origin v0.4.1
 
 **If a release fails on the host**, `pull-deploy.sh` records the digest as failed, so it isn't retried every 2 minutes, and **redeploys the previous digest automatically**. The smoke job then fails, because `/health` never reports the new version.
 
-**To roll back on purpose**, open an older tag's run of `deploy.yml` and choose **Re-run all jobs**. Its image already exists, so the build is skipped, `:prod` moves back, and the host follows.
+**To roll back on purpose**, open an older tag's run of `deploy.yml` and choose **Re-run all jobs**. Its image already exists, so the build is skipped, `:prod` moves back, and the host follows. This was verified on the live site (v0.4.1 → v0.4.0 → v0.4.1).
 
 The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. On the t3.small that's about 1.5 minutes of HTTP 502 from Caddy, plus the image pull before it. A release that changes the large layers (torch, the model) takes about 4 minutes to pull.
 
@@ -298,7 +298,7 @@ The site is down while the app restarts on each deploy, as it ingests the docs a
 | Per-IP limit | 11 parallel `POST /chat` from one IP: 10× 200 and 1× 429 (`Retry-After: 51`). A person in a browser can't trigger it, since each answer takes several seconds |
 | Stop / start | Back ~2.5 min after start (boot, ingest, uvicorn), with no redeploy; same Elastic IP, certificate still valid |
 | Answer latency | 8–9 s (sometimes 5–7 s), compared with 1.45 s median locally (LLM 1.30 s + everything else 0.15 s, over 210 eval rows). CPU credits are ruled out: balance ~38 and rising, CPU 2–3% when idle. The cause is under investigation (query below) |
-| Rollback test | Planned with v0.4.1 |
+| Rollback test (with v0.4.1) | Passed. The host's `history.log` digest for v0.4.1 equals the GHCR `:v0.4.1` digest (the `--prefer-index=false` fix). Re-running the v0.4.0 run brought back `/health` `v0.4.0` (`f39cef3`); re-running the v0.4.1 run restored `v0.4.1` (`0a1be25`) |
 
 ### Operating it
 
