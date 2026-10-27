@@ -76,10 +76,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # --prefer-index=false copies the tag's manifest as is. By default imagetools wraps a single source
+      # in a new OCI index, so :prod (and the host's history.log) would show a different digest for the
+      # same image.
       - name: Point :prod at this release
         env:
           TAG: ${{ github.ref_name }}
-        run: docker buildx imagetools create --tag "$IMAGE:prod" "$IMAGE:$TAG"
+        run: docker buildx imagetools create --prefer-index=false --tag "$IMAGE:prod" "$IMAGE:$TAG"
 
   smoke:
     needs: publish
