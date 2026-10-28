@@ -76,6 +76,7 @@ class AppSettings:
     trust_proxy_headers: bool = False  # use X-Forwarded-For (only behind a trusted proxy/load balancer)
     cors_origins: tuple[str, ...] = ()
     demo_autosend: bool = False  # let the web page auto-send ?demo=q1|q2 (screenshots / demo video only)
+    extra_frame_ancestors: tuple[str, ...] = ()  # local testing only: more sites that may frame /embed
 
 
 def get_app_settings() -> AppSettings:
@@ -91,4 +92,5 @@ def get_app_settings() -> AppSettings:
         trust_proxy_headers=_bool_env("TRUST_PROXY_HEADERS"),
         cors_origins=_list_env("CORS_ORIGINS"),
         demo_autosend=_bool_env("DEMO_AUTOSEND"),
+        extra_frame_ancestors=_list_env("EXTRA_FRAME_ANCESTORS"),
     )

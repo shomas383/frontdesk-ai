@@ -1,5 +1,6 @@
 {
   "clinic_name": "こもれび整体院",
+  "embed_origins": ["https://komorebi.shomasawa.com"],
   "doc_labels": {
     "01_menu_prices": "料金・メニュー",
     "02_hours": "営業時間・定休日",

@@ -1,6 +1,7 @@
 """Smoke test a deployed front desk: wait for /health (optionally a specific release), then ask 3 questions.
 
 Usage: python deploy/smoke.py https://demo.shomasawa.com [--expect-version v0.4.0] [--timeout 900]
+       [--embed-origin https://komorebi.shomasawa.com]
 
 Standard library only, so it runs in CI without installing the app. The questions are eval questions
 whose behavior has been stable across every labeled run; each one costs a real LLM call.
@@ -16,6 +17,7 @@ import urllib.error
 import urllib.request
 
 TENANT = "komorebi-seitai-demo"
+EMBED_ORIGIN = "https://komorebi.shomasawa.com"  # data/<tenant>/site.json embed_origins
 # (eval id, question, expected behavior, a source that must be cited or None)
 CHECKS = [
     ("q01", "60分の全身整体はいくらですか？", "answer", "01_menu_prices"),
@@ -35,6 +37,31 @@ def get_json(url: str, body: dict | None = None, timeout: float = 30) -> tuple[i
             return e.code, json.loads(e.read())
         except ValueError:
             return e.code, {}
+
+
+def frame_ancestors_of(url: str) -> str | None:
+    """The frame-ancestors directive of the page's Content-Security-Policy header (None if missing)."""
+    try:
+        with urllib.request.urlopen(url, timeout=30) as res:
+            csp = res.headers.get("Content-Security-Policy", "")
+    except urllib.error.HTTPError as e:
+        csp = e.headers.get("Content-Security-Policy", "")
+    for directive in csp.split(";"):
+        name, _, value = directive.strip().partition(" ")
+        if name == "frame-ancestors":
+            return value
+    return None
+
+
+def check_framing(base: str, embed_origin: str) -> list[str]:
+    """Only the clinic's site may frame /embed; the full-page chat refuses framing. No LLM calls."""
+    failures = []
+    for path, expected in [("/", "'none'"), (f"/embed?tenant={TENANT}", embed_origin)]:
+        got = frame_ancestors_of(f"{base}{path}")
+        print(f"{'ok  ' if got == expected else 'FAIL'} frame-ancestors {path}: {got}")
+        if got != expected:
+            failures.append(f"{path}: expected frame-ancestors {expected}, got {got}")
+    return failures
 
 
 def wait_for_health(base: str, expect_version: str | None, timeout: float) -> dict:
@@ -68,12 +95,13 @@ def main() -> int:
     parser.add_argument("base_url")
     parser.add_argument("--expect-version", help="wait until /health reports this version (the git tag)")
     parser.add_argument("--timeout", type=float, default=900, help="seconds to wait for /health")
+    parser.add_argument("--embed-origin", default=EMBED_ORIGIN, help="the site expected to be allowed to frame /embed")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
     wait_for_health(base, args.expect_version, args.timeout)
 
-    failures = []
+    failures = check_framing(base, args.embed_origin)
     for qid, question, behavior, source in CHECKS:
         status, body = get_json(f"{base}/chat", {"tenant": TENANT, "message": question}, timeout=60)
         ok = (status == 200 and body.get("behavior") == behavior

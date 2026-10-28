@@ -35,12 +35,59 @@ def test_static_assets_are_served(path, content_type):
     assert content_type in res.headers["content-type"]
 
 
+HOMEPAGE_ORIGIN = "https://komorebi.shomasawa.com"
+
+
+def csp_directives(header: str) -> dict[str, str]:
+    return dict(part.strip().split(" ", 1) for part in header.split(";"))
+
+
 def test_security_headers():
     with make_client() as client:
         res = client.get("/")
     csp = res.headers["content-security-policy"]
     assert "default-src 'self'" in csp and "frame-ancestors 'none'" in csp
+    assert res.headers["x-frame-options"] == "DENY"
     assert res.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.parametrize("method, path", [
+    ("GET", "/"), ("GET", "/api/config"), ("GET", "/health"), ("GET", "/static/app.js"),
+    ("GET", "/static/embed.html"),  # the same page without the per-tenant header: never framable
+    ("GET", "/no-such-page"), ("POST", "/chat"),
+])
+def test_everything_but_embed_refuses_framing(method, path):
+    with make_client() as client:
+        res = client.request(method, path, json={"tenant": "other-clinic", "message": "x"})
+    assert csp_directives(res.headers["content-security-policy"])["frame-ancestors"] == "'none'"
+    assert res.headers["x-frame-options"] == "DENY"
+
+
+def test_embed_can_be_framed_by_the_tenants_own_site():
+    with make_client() as client:
+        main = client.get("/")
+        res = client.get("/embed", params={"tenant": DEFAULT_TENANT})
+    embed_csp = csp_directives(res.headers["content-security-policy"])
+    assert embed_csp["frame-ancestors"] == HOMEPAGE_ORIGIN
+    # Only frame-ancestors differs from the full page's policy.
+    main_csp = csp_directives(main.headers["content-security-policy"])
+    assert {**embed_csp, "frame-ancestors": "'none'"} == main_csp
+    assert "x-frame-options" not in res.headers  # it can't list sites; old browsers would block the clinic too
+    assert res.headers["x-content-type-options"] == "nosniff"
+
+
+def test_extra_frame_ancestors_are_added_for_local_testing():
+    with make_client(extra_frame_ancestors=("http://127.0.0.1:8766",)) as client:
+        res = client.get("/embed", params={"tenant": DEFAULT_TENANT})
+    assert csp_directives(res.headers["content-security-policy"])["frame-ancestors"] == (
+        f"{HOMEPAGE_ORIGIN} http://127.0.0.1:8766")
+
+
+def test_tenant_without_embed_origins_cannot_be_framed():
+    with make_client(allowed_tenants=(DEFAULT_TENANT, "no-site-clinic")) as client:
+        res = client.get("/embed", params={"tenant": "no-site-clinic"})
+    assert res.status_code == 200
+    assert csp_directives(res.headers["content-security-policy"])["frame-ancestors"] == "'none'"
 
 
 def test_page_config():

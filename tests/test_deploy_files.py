@@ -43,6 +43,9 @@ def test_app_environment_matches_the_demo_setup(compose):
     assert env["TRUST_PROXY_HEADERS"] == "true"  # behind Caddy, or every visitor shares one IP
     assert env["DEMO_AUTOSEND"] == "false"
     assert env["LLM_PROVIDER"] == "anthropic"
+    assert env["CORS_ORIGINS"] == ""  # the widget's iframe is same-origin with the API
+    # Local browser checks only: in production, only site.json's embed_origins may frame /embed.
+    assert "EXTRA_FRAME_ANCESTORS" not in (DEPLOY_DIR / "compose.prod.yml").read_text(encoding="utf-8")
 
 
 def test_app_runs_one_worker_without_access_log(compose):

@@ -31,6 +31,7 @@ from pydantic import BaseModel
 from src import db
 from src.answer import FALLBACK_ANSWER, answer_question
 from src.config import DATA_DIR, AppSettings, get_app_settings
+from src.framing import frame_ancestors
 from src.limits import RateLimiter, now_jst
 from src.llm import LLMProvider, get_provider
 from src.pricing import estimate_cost_usd
@@ -57,11 +58,29 @@ def build_info() -> dict[str, str]:
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 # Everything the page needs is same-origin and none of it is inline, so the CSP can be strict.
+CSP_DIRECTIVES = {
+    "default-src": "'self'",
+    "img-src": "'self' data:",
+    "frame-ancestors": "'none'",
+    "base-uri": "'none'",
+    "form-action": "'none'",
+}
 SECURITY_HEADERS = {
-    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; "
-                               "base-uri 'none'; form-action 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
+}
+
+
+def content_security_policy(frame_ancestors: str = "'none'") -> str:
+    return "; ".join(f"{name} {value}" for name, value in
+                     {**CSP_DIRECTIVES, "frame-ancestors": frame_ancestors}.items())
+
+
+# Sent on every response except a successful /embed, which sets its own CSP listing the tenant's sites.
+# X-Frame-Options is for old browsers; it can't list sites, so /embed doesn't get it.
+NO_FRAMING_HEADERS = {
+    "Content-Security-Policy": content_security_policy(),
+    "X-Frame-Options": "DENY",
 }
 
 
@@ -85,11 +104,20 @@ def _setup_logging() -> None:
         request_log.setLevel(logging.INFO)
 
 
+def _read_site(tenant_id: str) -> dict[str, Any]:
+    path = DATA_DIR / tenant_id / "site.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
 def load_site(tenant_id: str) -> dict[str, Any]:
     """Display info for the web page (data/<tenant>/site.json): clinic_name and doc_id -> label."""
-    path = DATA_DIR / tenant_id / "site.json"
-    site = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+    site = _read_site(tenant_id)
     return {"clinic_name": site.get("clinic_name", tenant_id), "doc_labels": site.get("doc_labels", {})}
+
+
+def load_embed_origins(tenant_id: str) -> list[str]:
+    """The clinic's own sites, which may show /embed in an iframe (site.json "embed_origins")."""
+    return list(_read_site(tenant_id).get("embed_origins", []))
 
 
 def log_event(**fields: Any) -> None:
@@ -136,6 +164,8 @@ def create_app(
     async def security_headers(request: Request, call_next):
         response = await call_next(request)
         response.headers.update(SECURITY_HEADERS)
+        if "content-security-policy" not in response.headers:  # only a successful /embed sets its own
+            response.headers.update(NO_FRAMING_HEADERS)
         return response
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -149,7 +179,9 @@ def create_app(
         """The compact chat that widget.js shows in an iframe on a clinic's own site."""
         if tenant not in settings.allowed_tenants:
             raise HTTPException(404, detail="unknown tenant")
-        return FileResponse(STATIC_DIR / "embed.html")
+        origins = [*load_embed_origins(tenant), *settings.extra_frame_ancestors]
+        csp = content_security_policy(frame_ancestors(origins))
+        return FileResponse(STATIC_DIR / "embed.html", headers={"Content-Security-Policy": csp})
 
     @app.get("/api/config")
     def page_config(tenant: str | None = None) -> dict[str, Any]:
