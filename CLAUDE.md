@@ -60,12 +60,21 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
       3. If that fails, it auto-rolls back to the last good digest.
       - GitHub has no AWS credentials.
 
+  - **Step 3.5 (website widget + demo clinic homepage): built, release pending (v0.5.0).** See README "Embedding the widget".
+    - **Widget:** `GET /widget.js` (one `<script>` tag: `data-tenant`, `data-offset-bottom`, `window.FrontdeskWidget.open/close/toggle`) frames `GET /embed?tenant=…`, the compact chat. The widget's bar reads 「<clinic> AI受付」; embed mode greets as AI受付, and the full page keeps AIフロントデスク.
+    - **Framing:** only `site.json` `embed_origins` may frame `/embed` (CSP `frame-ancestors`, validated in `src/framing.py`). Everything else sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. This doesn't protect `/chat` itself; that stays covered by the rate limits and caps. CORS stays off.
+    - **Homepage:** `deploy/sites/komorebi`, served by our Caddy at komorebi.shomasawa.com, with a Cloudflare record `cloudflare_dns_record.homepage`. Its content comes from the docs only; tests check prices, hours, the hours grid, and the absence of claim words.
+    - **Suggestion chips** are per mode in `site.json` (`page`: showcase; `embed`: everyday). The five embed chips were checked once through the real pipeline: all `answer`.
+    - **Answer path unchanged**, so no eval rerun.
+    - **Release steps (user):** `terraform plan` (expect 1 to add) → apply → `nslookup komorebi.shomasawa.com` → push main → tag v0.5.0 → smoke (framing headers + homepage) → `python scripts/browser_check.py --site https://komorebi.shomasawa.com`.
+
 ## Backlog (not started)
 - **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.
   - Reproduced live on 2026-10-27: 「平日の営業時間は？」 ended with 「詳しくはお気軽にお問い合わせください」.
   - Candidate prompt fix, measured as its own step (commit + 3 repeats on both sets).
   - Also count answer-behavior rows that contain handoff phrases, including 「お気軽にお問い合わせ」.
   - Check that real handoffs (q36/q54/q64) and medical redirects don't regress.
+- **Widget extras** (scope-guarded out of Step 3.5; listed in README Backlog): theming, teaser/badge, conversation across pages, analytics, embed_origins admin, signed embed tokens, versioned widget + SRI, CORP for COEP sites, CSP report-to, `data-hide-launcher`, English UI.
 
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.
@@ -109,7 +118,10 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 | `src/pricing.py` | token prices + `estimate_cost_usd` (eval and API) |
 | `src/app.py` | FastAPI `POST /chat`, `GET /health`; calls `answer_question` with no feature kwargs so it always matches eval defaults (a test enforces this). JSON-line request logs on stdout, no IPs |
 | `src/limits.py`, `src/usage.py`, `src/redact.py` | per-IP rate limiter (in memory → **uvicorn must run with 1 worker**); daily question cap + token budget in Postgres `usage_daily` (JST day); phone/email redaction before logging |
-| `src/static/`, `data/<tenant>/site.json` | web chat page; `site.json` holds `clinic_name` + `doc_labels` (a test requires a label for every doc, so add one when adding a doc). `?demo=` auto-send only with `DEMO_AUTOSEND=true` |
+| `src/static/`, `data/<tenant>/site.json` | web chat page (`index.html`), the compact `embed.html` (served at `/embed`) and `widget.js` (served at `/widget.js`). `site.json` holds `clinic_name`, `doc_labels` (a test requires a label for every doc, so add one when adding a doc), `suggestions` (`page`/`embed`) and `embed_origins`. `?demo=` auto-send only with `DEMO_AUTOSEND=true` |
+| `src/framing.py` | CSP `frame-ancestors` for `/embed`: only plain `https://host[:port]` origins (http only for localhost), invalid entries dropped, empty → `'none'` |
+| `deploy/sites/komorebi/` | the fictional clinic's homepage (static; served by Caddy at `HOMEPAGE_DOMAIN`). Content must match the docs (`tests/test_homepage.py`). Photos: Unsplash WebP, credited in README; `.webp` is binary in `.gitattributes` |
+| `scripts/browser_check.py` | Playwright check of the homepage + widget at phone/desktop widths, with the real app on test fakes (no DB/LLM). Screenshots to `.browser-check/` (gitignored). Dev only: `requirements-browser.txt` |
 | `Dockerfile`, `docker-compose.yml` | CPU torch + bge-m3 baked in. `docker compose up -d` starts only the dev db; `--profile app` adds the API, which runs `ingest --if-empty` on start |
 | `deploy/` | Production stack, shipped inside the image as `/app/deploy`:<br>• `compose.prod.yml`: Caddy + app + pgvector, awslogs; only Caddy publishes ports<br>• `Caddyfile`: no access log; client IPs filtered out of the error log<br>• `deploy.sh`: renders `/opt/frontdesk/.env` from Parameter Store, runs compose up, waits for healthy<br>• `smoke.py`: `/health` version + 3 questions<br>`tests/test_deploy_files.py` checks the prod invariants and for stray `\r` |
 | `infra/` | Terraform (local state, gitignored; back it up): default VPC, SG 80/443, EC2, EIP, instance role, log group (30 d), Cloudflare record. `user_data.sh.tftpl` is the first boot (swap, Docker, Compose, timer). `infra/host/` holds `pull-deploy.sh` (lock, digest compare, failed-digest skip, auto-rollback, `--force`) and the systemd units |
@@ -131,7 +143,8 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 - **How it was calibrated:** on all 980 labeled M2 answers. Before changing it, replay it offline over the labeled runs and compare its firings with the hand labels.
 
 ## Production (demo.shomasawa.com)
-- **Settings:** `APP_TODAY=2026-10-24` (pinned, so answers match eval), `TRUST_PROXY_HEADERS=true` (behind Caddy), `DEMO_AUTOSEND=false`, and 1 uvicorn worker.
+- **Settings:** `APP_TODAY=2026-10-24` (pinned, so answers match eval), `TRUST_PROXY_HEADERS=true` (behind Caddy), `DEMO_AUTOSEND=false`, and 1 uvicorn worker. `EXTRA_FRAME_ANCESTORS` is never set (local browser checks only; a test enforces it).
+- **Homepage:** komorebi.shomasawa.com, from `deploy/sites/komorebi` (bind-mounted into Caddy). `deploy.sh` restarts Caddy on every deploy, because the release directory is replaced and a mounted directory would otherwise be served empty.
 - **Ingest:** runs in full on every container start, so the DB matches the docs in the image. A docs change ships as a new tag.
 - **Parameters:** secrets live in Parameter Store under `/frontdesk-ai/prod/`, created by the user. Never put them in git, the image or Terraform. A parameter named after a limit (e.g. `DAILY_QUESTION_CAP`) overrides it after `sudo /opt/frontdesk/pull-deploy.sh --force` on the host.
 - **Releases** are tags (`v0.4.0`, …). To roll back, re-run an older tag's `deploy.yml` run.
@@ -151,6 +164,7 @@ python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.eval --aggregate eval/runs/<ts>_<name>.repeats.json   # after labeling repeats; no API calls
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]
 pytest
+python scripts/browser_check.py [--webkit] [--site https://komorebi.shomasawa.com]   # Playwright; dev only
 git tag vX.Y.Z && git push origin vX.Y.Z                            # release (deploy.yml → GHCR :prod → host)
 cd infra; terraform plan -out tf.plan; terraform apply tf.plan      # user runs these (needs aws login + CLOUDFLARE_API_TOKEN)
 aws ssm start-session --region us-east-2 --target <instance-id>     # shell on the host

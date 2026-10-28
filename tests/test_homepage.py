@@ -100,6 +100,17 @@ def test_images_are_referenced_sized_and_within_budget(html):
     assert page <= MAX_PAGE, f"homepage is {page} bytes (budget {MAX_PAGE})"
 
 
-def test_photo_credits_are_on_the_page(html):
-    for name in ("Ester Avanesyan", "Daniel Chen", "Mayur Roxan", "Sven Mieke", "Ryunosuke Kikuno"):
-        assert name in html
+PHOTOGRAPHERS = ("Ester Avanesyan", "Daniel Chen", "Mayur Roxan", "Sven Mieke", "Ryunosuke Kikuno")
+
+
+def test_photo_credits_are_on_the_page_and_in_the_readme(html):
+    readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+    for name in PHOTOGRAPHERS:
+        assert name in html and name in readme
+    for p in (SITE_DIR / "img").glob("*.webp"):
+        assert f"`{p.name}`" in readme, f"{p.name} has no credit row in the README"
+
+
+def test_readme_snippet_is_the_homepage_tag(html):
+    readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
+    assert f"{WIDGET_TAG} async></script>" in readme

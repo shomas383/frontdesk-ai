@@ -166,7 +166,9 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 | | Daily question cap or token budget used up: `200` with 「…お電話またはLINEにて当院へ直接お問い合わせください。」, `behavior: handoff`; the LLM is not called |
 | `GET /health` | `200 {status, db, model, version, git_sha}` (`version`/`git_sha` come from the image build args; `dev`/`unknown` locally), or `503` if the database is unreachable |
 | `GET /` | The web chat (below) |
-| `GET /api/config` | `{tenant, clinic_name, doc_labels, max_message_chars, demo_autosend}` for the page |
+| `GET /embed?tenant=<id>` | The same chat in a compact layout, for the widget's iframe (see [Embedding the widget](#embedding-the-widget)). `404` for an unknown tenant |
+| `GET /widget.js` | The one script a clinic adds to its own site. `Cache-Control: public, max-age=300` |
+| `GET /api/config[?tenant=<id>]` | `{tenant, clinic_name, doc_labels, suggestions, max_message_chars, demo_autosend}` for the page; without `tenant`, the first allowed tenant |
 
 **Protection:**
 - Per-IP limits (`RATE_LIMIT_PER_MINUTE`/`_PER_DAY`) live in process memory, keyed by a salted hash of the IP.
@@ -185,13 +187,77 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 
 Open http://localhost:8000/. It is plain HTML/CSS/JS in [src/static/](src/static/): no build step, no CDNs, no web fonts.
 
-- **Header:** a disclaimer banner and an "About this demo" link to this repo.
-- **Suggested-question chips:** they show off the strengths: price, holiday hours, a stale blog price, an ended campaign, and a medical question.
+- **Header:** a disclaimer banner. (The "About this demo" link to this repo is removed while the repo is private.)
+- **Suggested-question chips:** from `suggestions.page` in `data/<tenant>/site.json`. They show off the strengths: price, holiday hours, a stale blog price, an ended campaign, and a medical question. The widget uses `suggestions.embed` instead: everyday questions a customer would ask.
 - **Under each answer:** source chips with friendly names from `data/<tenant>/site.json`, and a tag for `handoff` (スタッフにおつなぎします) or `refuse_redirect` (医療機関へのご相談をおすすめ).
 - **Input and errors:** a 300-character counter, and friendly messages for 422, 429 (with a live `Retry-After` countdown) and network errors.
 - **Nothing is stored:** no localStorage or cookies; a reload clears the chat. Answers are inserted as text, never as HTML.
-- **Security headers:** a strict CSP (`default-src 'self'`), `nosniff`, and `no-referrer`.
+- **Security headers:** a strict CSP (`default-src 'self'`), `nosniff`, and `no-referrer`. Every response refuses framing (`frame-ancestors 'none'`, `X-Frame-Options: DENY`) except `/embed`, which allows only the tenant's own sites.
 - **`?demo=q1|q2`** auto-sends questions for screenshots and the demo video. It works only with `DEMO_AUTOSEND=true` (off by default).
+
+### Embedding the widget
+
+A clinic adds one tag to its own site:
+
+```html
+<script src="https://demo.shomasawa.com/widget.js" data-tenant="komorebi-seitai-demo" async></script>
+```
+
+It draws a launcher button in the bottom-right corner. The button opens a panel that shows the chat (`/embed`) in an iframe, so the chat's CSS, JS and CSP stay isolated from the site.
+
+| | |
+|---|---|
+| `data-tenant` | Required. Must be in `ALLOWED_TENANTS` |
+| `data-offset-bottom="64"` | Lifts the launcher by that many pixels (0–300), e.g. above a sticky 電話 / LINE予約 bar |
+| `window.FrontdeskWidget.open()` / `.close()` / `.toggle()` | For the site's own buttons, e.g. a 「質問する」 button in that bar |
+
+**How it behaves:**
+- **Small and quiet.** It's 7.4 KB, or 3.0 KB gzipped; a test enforces 8 KB / 3 KB. It has no dependencies, makes no requests of its own, and stores nothing. The iframe is only created when the panel is first opened, so a visitor who never opens it sends us nothing but the `widget.js` request.
+- **Accessible.** The launcher is labelled 「AI受付に質問する」 and has `aria-expanded`. The panel is a `role="dialog"`, and Esc closes it, including from inside the chat. Focus moves into the panel when it opens and returns to the button that opened it.
+- **Phones.** At 480 px and below, the panel is full screen. The close button sits outside the iframe, so the panel closes even if the chat can't load.
+- **One header.** The widget's bar shows 「<clinic name> AI受付」; the name comes from `/embed` once it loads. The chat inside keeps only the one-line disclaimer.
+- **The host site's CSP**, if it has one, needs our origin in `script-src` and `frame-src`. The widget's styles go in through a constructed stylesheet in a shadow root, so `style-src` needs nothing extra.
+- **Messages.** The widget and `/embed` exchange only three messages. `/embed` sends an empty close request and the clinic's public name. The widget sends a focus request. Each side accepts messages only from the other's window and origin.
+
+**Who can show the chat:** `data/<tenant>/site.json` lists `embed_origins`, the clinic's own sites. `/embed` sends `frame-ancestors` with exactly those origins, and every other response refuses framing. `src/framing.py` drops any entry that isn't a plain `https://host[:port]`, so it fails closed, and a test checks every configured origin. `EXTRA_FRAME_ANCESTORS` adds origins for local browser checks only; a test keeps it out of production.
+
+| Threat | Covered by |
+|---|---|
+| Another site showing our chat in a frame (posing as the clinic, clickjacking) | `frame-ancestors`, enforced by the browser on the framed response, for every ancestor |
+| Another site loading `widget.js` | Not prevented, since it's a public file. Its iframe is refused, though, so the panel shows the browser's blocked-frame page |
+| Scripts calling `POST /chat` directly (curl, bots, any origin) | **Not** covered by CSP or CORS: CORS only stops browsers from reading cross-origin responses, and curl ignores it. Covered by the per-IP rate limits, `DAILY_QUESTION_CAP` and `DAILY_TOKEN_BUDGET`, all unchanged |
+| The host page reading or changing the conversation | The same-origin policy. The iframe is cross-origin to the host, and the only channel is the three messages above |
+
+CORS stays off: the iframe is same-origin with the API.
+
+**Demo homepage:** https://komorebi.shomasawa.com is a fictional clinic site, [deploy/sites/komorebi/](deploy/sites/komorebi/). Our Caddy serves it as a second site with a strict CSP, and it embeds the widget exactly as above.
+- **Content:** it comes from the clinic's docs only. Tests check every price and opening-hours range against the docs, and check that the page makes no outcome claims and has no testimonials.
+- **Phones:** a sticky bar has 電話 / LINE予約, shown as inert 「デモ」 items, and 質問する, which opens the chat.
+
+**Photos** (Unsplash License; converted to WebP at quality 72, 1600 px wide for the hero and 1000 px for the rest):
+
+| File | Photo | Photographer |
+|---|---|---|
+| `hero-leaves.webp` | [Sunlight shines through green leaves](https://unsplash.com/photos/sunlight-shines-through-green-leaves-pnp9hMoBauQ) | Ester Avanesyan |
+| `room.webp` | [Brown wooden bench near window](https://unsplash.com/photos/brown-wooden-bench-near-window-SoNaNOFT974) | Daniel Chen |
+| `treatment-bed.webp` | [A massage table with a beige sheet](https://unsplash.com/photos/JnsuyfJrxQw), cropped to 3:2 | Mayur Roxan |
+| `towels.webp` | [Folded towels near potted plants](https://unsplash.com/photos/folded-towels-near-potted-plants-BB3dR-N5Npg) | Sven Mieke |
+| `shoji-corridor.webp` | [A hallway with a light hanging from the ceiling](https://unsplash.com/photos/FDyKDwYe-to) | Ryunosuke Kikuno |
+
+**Browser check:** `scripts/browser_check.py` uses Playwright. It runs the real app with test fakes, so there's no DB and no LLM, and serves the homepage on an allowed port and on a refused one. At phone and desktop widths, it checks:
+- the open, close and focus behaviour
+- the full-screen panel on phones
+- that requests go only to the two origins, with no cookies or storage
+- no CSP violations
+- that the refused site can't load the chat
+
+It saves screenshots to `.browser-check/`.
+
+```powershell
+pip install -r requirements-browser.txt; python -m playwright install chromium   # dev only
+python scripts/browser_check.py                                             # local, fakes, no cost
+python scripts/browser_check.py --site https://komorebi.shomasawa.com        # live; sends no question
+```
 
 ### Logs and retention
 
@@ -212,13 +278,13 @@ Each request is logged as one JSON line on stdout:
 
 ## Deploy (AWS)
 
-The demo runs at **https://demo.shomasawa.com** on one EC2 instance, a t3.medium in us-east-2 with 4 GB RAM. The instance runs `deploy/compose.prod.yml`: Caddy for HTTPS, then the app, then Postgres with pgvector. Terraform in [infra/](infra/) defines the AWS side. A git tag starts a release.
+The demo runs at **https://demo.shomasawa.com** on one EC2 instance, a t3.medium in us-east-2 with 4 GB RAM. The instance runs `deploy/compose.prod.yml`: Caddy for HTTPS, then the app, then Postgres with pgvector. The same Caddy also serves the fictional clinic's homepage at **https://komorebi.shomasawa.com**, which embeds the chat widget. Terraform in [infra/](infra/) defines the AWS side. A git tag starts a release.
 
 ```mermaid
 flowchart LR
   visitor([Browser]) -- "DNS: Cloudflare, DNS only" --> eip[Elastic IP]
   subgraph ec2["EC2 t3.medium · Amazon Linux 2023 · SG: 80/443 only"]
-    caddy["Caddy<br/>Let's Encrypt, HTTP→HTTPS"] --> app["app<br/>FastAPI + bge-m3, 1 worker"] --> db[("Postgres + pgvector")]
+    caddy["Caddy<br/>Let's Encrypt, HTTP→HTTPS<br/>+ komorebi homepage (static)"] --> app["app<br/>FastAPI + bge-m3, 1 worker"] --> db[("Postgres + pgvector")]
     timer["frontdesk-deploy.timer<br/>every 2 min"] -. "new :prod digest → deploy.sh" .-> app
   end
   eip --> caddy
@@ -262,7 +328,7 @@ Anthropic usage is capped separately by the daily limits, at roughly $0.25/day a
 1. **Parameters:** in Systems Manager → Parameter Store, create `/frontdesk-ai/prod/ANTHROPIC_API_KEY` and `/frontdesk-ai/prod/POSTGRES_PASSWORD`.
    - Both are SecureString, using the default `aws/ssm` key.
    - The password must use only letters, digits and `. _ ~ -`, because `deploy.sh` checks it.
-2. **Infrastructure:** `terraform init`, then `plan`, then `apply` in `infra/`, with a Cloudflare token limited to DNS:Edit on the zone. See [infra/README.md](infra/README.md). That file also covers backing up the local state.
+2. **Infrastructure:** `terraform init`, then `plan`, then `apply` in `infra/`, with a Cloudflare token limited to DNS:Edit on the zone. It creates two DNS records: `demo` and the homepage, `komorebi`. See [infra/README.md](infra/README.md). That file also covers backing up the local state.
 3. **First release:** run `git tag v0.4.0 && git push origin v0.4.0`.
    - GHCR packages pushed from a private repo start out private. After that first push, set the package to **Public** (Package settings → Change visibility); the host pulls anonymously.
    - Then re-run the failed smoke job.
@@ -276,13 +342,13 @@ git tag v0.4.1 && git push origin v0.4.1
 1. **Test:** `deploy.yml` runs the tests and gitleaks.
 2. **Publish:** it builds and pushes `ghcr.io/shomas383/frontdesk-ai:v0.4.1`, with the version and git SHA baked in, then moves `:prod` to that image.
 3. **Deploy:** within 2 minutes the host's timer sees a new `:prod` digest. It copies `deploy/` out of that image and runs its `deploy.sh`. The app ingests the docs, loads the model and becomes healthy.
-4. **Smoke test:** the job waits until `/health` reports `v0.4.1`, then asks 3 eval questions (price → `answer`, gift card → `handoff`, symptom → `refuse_redirect`).
+4. **Smoke test:** the job waits until `/health` reports `v0.4.1`, then asks 3 eval questions (price → `answer`, gift card → `handoff`, symptom → `refuse_redirect`). From v0.5.0 it also checks the framing headers (`/` refuses framing; `/embed` allows only the clinic's site) and the homepage at komorebi.shomasawa.com.
 
 **If a release fails on the host**, `pull-deploy.sh` records the digest as failed, so it isn't retried every 2 minutes, and **redeploys the previous digest automatically**. The smoke job then fails, because `/health` never reports the new version.
 
 **To roll back on purpose**, open an older tag's run of `deploy.yml` and choose **Re-run all jobs**. Its image already exists, so the build is skipped, `:prod` moves back, and the host follows. This was verified on the live site (v0.4.1 → v0.4.0 → v0.4.1).
 
-The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. Measured on the t3.small, that's about 1.5 minutes of HTTP 502 from Caddy, plus the image pull before it. A release that changes the large layers (torch, the model) takes about 4 minutes to pull.
+The site is down while the app restarts on each deploy, as it ingests the docs and then loads the model. Caddy is also restarted on every deploy. Its bind mounts point into the release directory, which each deploy replaces, and a mounted directory, such as the homepage's, would otherwise be served empty. Measured on the t3.small, that's about 1.5 minutes of HTTP 502 from Caddy, plus the image pull before it. A release that changes the large layers (torch, the model) takes about 4 minutes to pull.
 
 **Digests:** `:<tag>` is the image manifest. Until v0.4.0, `:prod` was a one-entry OCI index wrapping that manifest, created by `imagetools create`. So the host's `history.log` showed a different digest for the same image: for v0.4.0, index `sha256:287055d1…` wraps manifest `sha256:49c64a9a…`. From v0.4.1, `deploy.yml` copies the manifest as-is (`--prefer-index=false`), so the host records the tag's own digest.
 
@@ -464,6 +530,19 @@ See the [Roadmap](#roadmap). The automatic grader (M3) is deferred so the public
 Hybrid search and reranking were tried in M2. They remain available as `--retrieval hybrid|rerank` but are not the default.
 
 ### Backlog
+
+- **Widget, not started (scope-guarded out of M4 Step 3.5):**
+  - theming and launcher position
+  - a greeting teaser or unread badge
+  - keeping the conversation across page navigations (would need storage)
+  - open and usage analytics
+  - an admin UI for `embed_origins`
+  - signed embed tokens that bind `/chat` to the embedding site
+  - a versioned widget URL with SRI
+  - a `Cross-Origin-Resource-Policy` header for COEP host sites
+  - CSP `report-to` for refused framing attempts
+  - `data-hide-launcher` for sites that use only their own button
+  - an English UI
 
 - **Unneeded staff follow-up on fully answered questions.** When the official docs fully answer a question, the bot sometimes still adds 「スタッフが確認のうえご案内」. For example, it corrects a blog's 6,600円 to the current 7,150円 and then defers to staff anyway, which makes a correct answer sound uncertain. Seen in the web-chat screenshots (2026-10-25), where `behavior` stayed `answer`. Reproduced on the live site (2026-10-27): 「平日の営業時間は？」 ended with 「詳しくはお気軽にお問い合わせください」.
   - Candidate fix: a prompt rule that tells the model not to add a handoff sentence when the cited official docs answer the question completely.
