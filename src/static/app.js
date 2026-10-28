@@ -1,13 +1,6 @@
 // Web chat for the AI front desk. No storage: the conversation lives only in this page's memory.
 "use strict";
 
-const SUGGESTIONS = [
-  "60分の料金は？",
-  "12月29日は何時まで？",
-  "ブログに6,600円って書いてありました",
-  "ギフト券はありますか？",
-  "腰痛は何回で治りますか？",
-];
 const BEHAVIOR_TAGS = {
   handoff: "スタッフにおつなぎします",
   refuse_redirect: "医療機関へのご相談をおすすめ",
@@ -179,8 +172,11 @@ function placeSuggestions() {
   }
 }
 
-function renderSuggestions() {
-  for (const question of SUGGESTIONS) {
+// Suggested questions come from the tenant's site.json, per mode: showcase questions on the full-page
+// demo, everyday customer questions in the widget on the clinic's site.
+function renderSuggestions(questions) {
+  suggestions.hidden = questions.length === 0;
+  for (const question of questions) {
     const chip = el("button", "chip", question);
     chip.type = "button";
     chip.addEventListener("click", () => ask(question));
@@ -198,7 +194,6 @@ async function runDemo() {
 }
 
 async function init() {
-  renderSuggestions();
   addBotMessage(WELCOME);
   placeSuggestions();
   desktop.addEventListener("change", placeSuggestions);
@@ -214,6 +209,7 @@ async function init() {
   state.labels = config.doc_labels || {};
   state.maxChars = config.max_message_chars || 300;
   if (config.clinic_name) $("clinic-name").textContent = config.clinic_name;
+  renderSuggestions((config.suggestions || {})[embedded ? "embed" : "page"] || []);
   updateComposer();
   if (config.demo_autosend) runDemo();
 }

@@ -135,6 +135,19 @@ def test_embed_mode_talks_to_the_widget_without_data():
     assert 'event.source === parent && event.data && event.data.type === "frontdesk:focus"' in js
 
 
+def test_suggestions_per_mode():
+    with make_client() as client:
+        suggestions = client.get("/api/config").json()["suggestions"]
+    # The full-page demo shows off: a stale blog price, an ended campaign, a medical question.
+    assert suggestions["page"] == ["60分の料金は？", "12月29日は何時まで？", "ブログに6,600円って書いてありました",
+                                   "ギフト券はありますか？", "腰痛は何回で治りますか？"]
+    # The widget on the clinic's own site: everyday questions a customer would ask.
+    assert suggestions["embed"] == ["初めてでも大丈夫ですか？", "駐車場はありますか？", "予約はどうすればいいですか？",
+                                    "60分の料金は？", "12月29日は何時まで？"]
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert 'renderSuggestions((config.suggestions || {})[embedded ? "embed" : "page"] || []);' in js
+
+
 def test_page_config_follows_the_message_limit():
     with make_client(max_message_chars=120) as client:
         assert client.get("/api/config").json()["max_message_chars"] == 120

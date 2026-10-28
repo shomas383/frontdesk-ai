@@ -110,9 +110,11 @@ def _read_site(tenant_id: str) -> dict[str, Any]:
 
 
 def load_site(tenant_id: str) -> dict[str, Any]:
-    """Display info for the web page (data/<tenant>/site.json): clinic_name and doc_id -> label."""
+    """Display info for the web page (data/<tenant>/site.json): clinic_name, doc_id -> label, and the
+    suggested questions per mode ("page": the full-page demo, "embed": the chat on the clinic's site)."""
     site = _read_site(tenant_id)
-    return {"clinic_name": site.get("clinic_name", tenant_id), "doc_labels": site.get("doc_labels", {})}
+    return {"clinic_name": site.get("clinic_name", tenant_id), "doc_labels": site.get("doc_labels", {}),
+            "suggestions": site.get("suggestions", {})}
 
 
 def load_embed_origins(tenant_id: str) -> list[str]:
