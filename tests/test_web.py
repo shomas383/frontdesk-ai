@@ -53,6 +53,40 @@ def test_page_config():
     assert config["doc_labels"]["10_campaign_2025"] == "過去のキャンペーン（終了）"
 
 
+def test_embed_serves_the_compact_chat():
+    with make_client() as client:
+        res = client.get("/embed", params={"tenant": DEFAULT_TENANT})
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("text/html")
+    html = res.text
+    assert '<body class="embed">' in html
+    assert "架空の整体院のデモ・個人情報は入力しないでください" in html  # the disclaimer stays visible
+    assert 'src="/static/app.js"' in html and 'href="/static/style.css"' in html
+
+
+@pytest.mark.parametrize("params", [{}, {"tenant": ""}, {"tenant": "other-clinic"}])
+def test_embed_needs_an_allowed_tenant(params):
+    with make_client() as client:
+        res = client.get("/embed", params=params)
+    assert res.status_code == 404
+    assert "frame-ancestors 'none'" in res.headers["content-security-policy"]
+
+
+def test_page_config_for_a_given_tenant():
+    with make_client() as client:
+        assert client.get("/api/config", params={"tenant": DEFAULT_TENANT}).json()["tenant"] == DEFAULT_TENANT
+        assert client.get("/api/config", params={"tenant": "other-clinic"}).status_code == 404
+        assert client.get("/api/config", params={"tenant": ""}).status_code == 404
+
+
+def test_embed_mode_talks_to_the_widget_without_data():
+    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    # The only messages: an empty close request to the parent, and focus requests accepted from the parent only.
+    assert js.count("postMessage(") == 1
+    assert 'parent.postMessage({ type: "frontdesk:close" }, "*")' in js
+    assert 'event.source === parent && event.data && event.data.type === "frontdesk:focus"' in js
+
+
 def test_page_config_follows_the_message_limit():
     with make_client(max_message_chars=120) as client:
         assert client.get("/api/config").json()["max_message_chars"] == 120

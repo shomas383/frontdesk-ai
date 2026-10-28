@@ -272,6 +272,14 @@ textarea:focus { outline: 2px solid var(--brand); outline-offset: 0; border-colo
   .msg { max-width: 76%; }
 }
 
+/* Embed (/embed inside widget.js's panel): the panel is narrow, so a one-line header and no side borders. */
+.embed .app { max-width: none; border: 0; }
+.embed .header { padding: 8px 12px; }
+.embed .brand { gap: 8px; }
+.embed .brand-mark { border-radius: 6px; }
+.embed .title { font-size: 0.95rem; }
+.embed .banner.compact { margin-top: 6px; }
+
 @media (prefers-reduced-motion: reduce) {
   .chat { scroll-behavior: auto; }
   .typing span { animation: none; opacity: 0.6; }

@@ -30,6 +30,8 @@ const chips = $("chips");
 const banner = $("banner");
 const composer = $("composer");
 const desktop = window.matchMedia("(min-width: 720px)");
+// /embed: the compact chat inside widget.js's panel on a clinic's site; the tenant comes from the URL.
+const embedded = document.body.classList.contains("embed");
 
 const state = {
   tenant: null,
@@ -201,8 +203,9 @@ async function init() {
   placeSuggestions();
   desktop.addEventListener("change", placeSuggestions);
   let config = {};
+  const tenant = new URLSearchParams(location.search).get("tenant") || "";
   try {
-    const response = await fetch("/api/config");
+    const response = await fetch(embedded ? `/api/config?tenant=${encodeURIComponent(tenant)}` : "/api/config");
     if (response.ok) config = await response.json();
   } catch {
     addNotice(MSG_NETWORK);
@@ -238,5 +241,17 @@ input.addEventListener("keydown", (event) => {
     form.requestSubmit();
   }
 });
+
+// Embedded: Esc asks widget.js to close the panel, and the panel asks us for focus when it opens.
+// The messages carry no conversation data, so posting to any parent origin ("*") reveals nothing.
+if (embedded) {
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !event.isComposing) parent.postMessage({ type: "frontdesk:close" }, "*");
+  });
+  window.addEventListener("message", (event) => {
+    // Not on touch devices: focusing the textarea would pop up the keyboard over the answer.
+    if (event.source === parent && event.data && event.data.type === "frontdesk:focus" && !touchOnly) input.focus();
+  });
+}
 
 init();

@@ -6,6 +6,7 @@ The access log is off because it prints client IPs; each request is logged as on
 
 POST /chat {tenant, message} -> {answer, behavior, sources};  GET /health
 GET / serves the web chat (src/static/); GET /api/config gives it the tenant, labels and limits.
+GET /embed?tenant=... is the same chat in a compact layout, shown in an iframe by widget.js.
 """
 
 from __future__ import annotations
@@ -143,10 +144,20 @@ def create_app(
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
 
+    @app.get("/embed", include_in_schema=False)
+    def embed(tenant: str = "") -> FileResponse:
+        """The compact chat that widget.js shows in an iframe on a clinic's own site."""
+        if tenant not in settings.allowed_tenants:
+            raise HTTPException(404, detail="unknown tenant")
+        return FileResponse(STATIC_DIR / "embed.html")
+
     @app.get("/api/config")
-    def page_config() -> dict[str, Any]:
-        """What the web page needs; the page serves the first allowed tenant."""
-        tenant = settings.allowed_tenants[0]
+    def page_config(tenant: str | None = None) -> dict[str, Any]:
+        """What the web page needs: the given tenant (embed page) or the first allowed one (full page)."""
+        if tenant is None:
+            tenant = settings.allowed_tenants[0]
+        elif tenant not in settings.allowed_tenants:
+            raise HTTPException(404, detail="unknown tenant")
         return {"tenant": tenant, **load_site(tenant), "max_message_chars": settings.max_message_chars,
                 "demo_autosend": settings.demo_autosend}
 
