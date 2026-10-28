@@ -21,7 +21,8 @@ def test_index_serves_the_chat_page():
     assert BANNER in html
     assert "架空の整体院のデモ・個人情報は入力しないでください" in html  # compact banner after the first question
     assert "AI front desk demo for a small Japanese clinic" in html
-    assert "About this demo" in html and REPO_URL in html
+    # The repo is private for now, so no About link (restore it before going public; see CLAUDE.md).
+    assert "About this demo" not in html and REPO_URL not in html
     assert 'src="/static/app.js"' in html and 'href="/static/style.css"' in html
 
 

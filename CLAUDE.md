@@ -137,6 +137,10 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 - **Releases** are tags (`v0.4.0`, …). To roll back, re-run an older tag's `deploy.yml` run.
 - **Host-side changes:** `infra/host/pull-deploy.sh` and the first-boot script only reach a host through Session Manager or a new instance (`ignore_changes = [ami, user_data]`). Everything in `deploy/` ships with the image.
 
+## Before going public
+Checklist for when the repo is made public (it is private for now):
+- [ ] Restore the full-page chat's "About this demo" link to the repo (`src/static/index.html`; removed while private), and flip the assertion in `tests/test_web.py::test_index_serves_the_chat_page`.
+
 ## Commands
 ```
 python -m src.ingest --tenant komorebi-seitai-demo [--if-empty]
