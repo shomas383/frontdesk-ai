@@ -1,6 +1,6 @@
 # infra/ — the AWS host for demo.shomasawa.com
 
-Terraform for one EC2 instance that runs `deploy/compose.prod.yml` (Caddy → app → Postgres/pgvector), plus the DNS record in Cloudflare. Releases don't go through Terraform: the instance pulls them from GHCR on its own (see [How a release reaches the host](#how-a-release-reaches-the-host)).
+Terraform for one EC2 instance that runs `deploy/compose.prod.yml` (Caddy → app → Postgres/pgvector), plus the DNS records in Cloudflare (the demo and the fictional clinic's homepage). Releases don't go through Terraform: the instance pulls them from GHCR on its own (see [How a release reaches the host](#how-a-release-reaches-the-host)).
 
 ## What each resource is
 
@@ -18,6 +18,7 @@ Terraform for one EC2 instance that runs `deploy/compose.prod.yml` (Caddy → ap
 | `data.aws_kms_alias.ssm` | The AWS-managed key that encrypts SecureString parameters (read, not created) | KMS → AWS managed keys → `aws/ssm` |
 | `aws_cloudwatch_log_group.app` | `/frontdesk-ai/prod`, 30-day retention. Docker's awslogs driver writes one stream per container (`frontdesk-app-1`, `-db-1`, `-caddy-1`) | CloudWatch → Logs → Log groups |
 | `cloudflare_dns_record.demo` | `demo.shomasawa.com` A → the Elastic IP, DNS only (grey cloud) | Cloudflare dashboard → shomasawa.com → DNS → Records |
+| `cloudflare_dns_record.homepage` | `komorebi.shomasawa.com` A → the same Elastic IP, DNS only. Caddy serves the demo clinic's homepage there (`deploy/sites/komorebi`) | Same place |
 
 **Not in Terraform, on purpose:**
 - **The two SecureString parameters,** `/frontdesk-ai/prod/ANTHROPIC_API_KEY` and `/frontdesk-ai/prod/POSTGRES_PASSWORD`. They were created by hand in Systems Manager → Parameter Store, so their values never enter Terraform state. Any other parameter under the path (e.g. `DAILY_QUESTION_CAP`) overrides the compose default of the same name on the next deploy.

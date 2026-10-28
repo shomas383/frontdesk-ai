@@ -16,6 +16,12 @@ variable "domain" {
   default     = "demo.shomasawa.com"
 }
 
+variable "homepage_domain" {
+  description = "The fictional clinic's homepage (deploy/sites/komorebi), served by the same Caddy; it embeds the chat widget from var.domain."
+  type        = string
+  default     = "komorebi.shomasawa.com"
+}
+
 variable "cloudflare_zone_id" {
   description = "Zone ID of shomasawa.com (Cloudflare dashboard → the zone → Overview → API). Passed in so the token needs no Zone:Read."
   type        = string

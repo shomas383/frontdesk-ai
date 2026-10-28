@@ -10,6 +10,10 @@ output "url" {
   value = "https://${var.domain}"
 }
 
+output "homepage_url" {
+  value = "https://${var.homepage_domain}"
+}
+
 output "session_command" {
   description = "Open a root-capable shell on the instance (no SSH)."
   value       = "aws ssm start-session --region ${var.region} --target ${aws_instance.web.id}"
