@@ -185,6 +185,12 @@ def create_app(
         csp = content_security_policy(frame_ancestors(origins))
         return FileResponse(STATIC_DIR / "embed.html", headers={"Content-Security-Policy": csp})
 
+    @app.get("/widget.js", include_in_schema=False)
+    def widget() -> FileResponse:
+        """The one script a clinic adds to its own site; it frames /embed. Short cache, so releases reach sites quickly."""
+        return FileResponse(STATIC_DIR / "widget.js", media_type="text/javascript",
+                            headers={"Cache-Control": "public, max-age=300"})
+
     @app.get("/api/config")
     def page_config(tenant: str | None = None) -> dict[str, Any]:
         """What the web page needs: the given tenant (embed page) or the first allowed one (full page)."""

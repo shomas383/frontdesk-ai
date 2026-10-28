@@ -109,6 +109,8 @@ def test_embed_serves_the_compact_chat():
     html = res.text
     assert '<body class="embed">' in html
     assert "架空の整体院のデモ・個人情報は入力しないでください" in html  # the disclaimer stays visible
+    assert 'href="/" target="_blank"' in html and REPO_URL not in html  # About: the full-page demo
+    assert 'id="clinic-name"' not in html  # the clinic name is in the widget's bar
     assert 'src="/static/app.js"' in html and 'href="/static/style.css"' in html
 
 
@@ -127,11 +129,13 @@ def test_page_config_for_a_given_tenant():
         assert client.get("/api/config", params={"tenant": ""}).status_code == 404
 
 
-def test_embed_mode_talks_to_the_widget_without_data():
+def test_embed_mode_tells_the_widget_nothing_about_the_conversation():
     js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    # The only messages: an empty close request to the parent, and focus requests accepted from the parent only.
-    assert js.count("postMessage(") == 1
+    # The only messages to the parent: an empty close request and the clinic's public name for the bar.
+    # Focus requests are accepted from the parent only.
+    assert js.count("postMessage(") == 2
     assert 'parent.postMessage({ type: "frontdesk:close" }, "*")' in js
+    assert 'parent.postMessage({ type: "frontdesk:ready", clinicName: config.clinic_name }, "*")' in js
     assert 'event.source === parent && event.data && event.data.type === "frontdesk:focus"' in js
 
 

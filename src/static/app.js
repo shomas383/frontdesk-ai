@@ -7,6 +7,9 @@ const BEHAVIOR_TAGS = {
 };
 const WELCOME =
   "こんにちは。こもれび整体院のAIフロントデスクです。料金・営業時間・ご予約などについて、院の資料をもとにお答えします。";
+// In the widget on the clinic's own site, the chat introduces itself as the clinic's AI受付.
+const WELCOME_EMBED =
+  "こんにちは。こもれび整体院のAI受付です。料金や営業時間、ご予約などについてお答えします。お気軽にご質問ください。";
 const MSG_NETWORK = "接続できませんでした。通信環境をご確認のうえ、もう一度お試しください。";
 const MSG_SERVER = "ただいま応答できません。お手数ですが、少し時間をおいてお試しください。";
 const MSG_TOO_LONG = (n) => `ご質問は${n}文字以内でご入力ください。`;
@@ -194,7 +197,7 @@ async function runDemo() {
 }
 
 async function init() {
-  addBotMessage(WELCOME);
+  addBotMessage(embedded ? WELCOME_EMBED : WELCOME);
   placeSuggestions();
   desktop.addEventListener("change", placeSuggestions);
   let config = {};
@@ -208,7 +211,10 @@ async function init() {
   state.tenant = config.tenant || null;
   state.labels = config.doc_labels || {};
   state.maxChars = config.max_message_chars || 300;
-  if (config.clinic_name) $("clinic-name").textContent = config.clinic_name;
+  const clinicName = $("clinic-name"); // the full page's header; in embed mode the widget's bar shows it
+  if (config.clinic_name && clinicName) clinicName.textContent = config.clinic_name;
+  // The clinic's public name for the widget's title bar; nothing about the conversation.
+  if (embedded && config.clinic_name) parent.postMessage({ type: "frontdesk:ready", clinicName: config.clinic_name }, "*");
   renderSuggestions((config.suggestions || {})[embedded ? "embed" : "page"] || []);
   updateComposer();
   if (config.demo_autosend) runDemo();
