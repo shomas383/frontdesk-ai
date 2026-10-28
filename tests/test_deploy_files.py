@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from src.config import ROOT_DIR
@@ -11,12 +13,13 @@ yaml = pytest.importorskip("yaml")
 
 DEPLOY_DIR = ROOT_DIR / "deploy"
 HOST_DIR = ROOT_DIR / "infra" / "host"
+BINARY_SUFFIXES = {".webp"}  # the demo homepage's photos (binary in .gitattributes)
 
 
 def linux_files():
     files = [p for d in (DEPLOY_DIR, HOST_DIR) if d.exists() for p in d.rglob("*") if p.is_file()]
     files += list((ROOT_DIR / "infra").glob("*.tftpl"))
-    return [p for p in files if "__pycache__" not in p.parts]
+    return [p for p in files if "__pycache__" not in p.parts and p.suffix not in BINARY_SUFFIXES]
 
 
 def test_linux_files_have_no_carriage_returns():
@@ -52,6 +55,26 @@ def test_app_runs_one_worker_without_access_log(compose):
     command = " ".join(compose["services"]["app"]["command"])
     assert "--workers 1" in command and "--no-access-log" in command
     assert "src.ingest" in command and "--if-empty" not in command  # DB always matches the image's docs
+
+
+def test_caddy_serves_the_demo_homepage(compose):
+    caddy = compose["services"]["caddy"]
+    assert caddy["environment"]["HOMEPAGE_DOMAIN"] == "${HOMEPAGE_DOMAIN:-komorebi.shomasawa.com}"
+    assert "./sites/komorebi:/srv/komorebi:ro" in caddy["volumes"]
+    assert (DEPLOY_DIR / "sites" / "komorebi" / "index.html").is_file()
+    caddyfile = (DEPLOY_DIR / "Caddyfile").read_text(encoding="utf-8")
+    block = caddyfile[caddyfile.index("{$HOMEPAGE_DOMAIN} {"):]
+    assert "root * /srv/komorebi" in block and "file_server" in block
+    csp = dict(d.strip().split(" ", 1) for d in re.search(r'Content-Security-Policy "([^"]+)"', block).group(1).split(";"))
+    assert csp["default-src"] == "'none'" and csp["frame-ancestors"] == "'none'"
+    assert csp["script-src"] == "'self' https://{$DOMAIN}" and csp["frame-src"] == "https://{$DOMAIN}"
+    assert "unsafe" not in block
+
+
+def test_deploy_restarts_caddy_every_time():
+    # Its mounts point into the release directory, which every deploy replaces (see deploy.sh).
+    lines = (DEPLOY_DIR / "deploy.sh").read_text(encoding="utf-8").splitlines()
+    assert "compose restart caddy" in lines  # unindented: not inside a condition
 
 
 def test_every_service_logs_to_cloudwatch(compose):

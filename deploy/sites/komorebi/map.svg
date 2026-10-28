@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 300" font-family="Hiragino Sans, Yu Gothic UI, Meiryo, sans-serif" font-size="14">
+  <rect width="560" height="300" fill="#f3efe4"/>
+  <!-- streets: the main street and the side street at the convenience store -->
+  <rect x="0" y="180" width="560" height="26" fill="#fff"/>
+  <rect x="360" y="0" width="26" height="180" fill="#fff"/>
+  <!-- railway and station (bottom) -->
+  <rect x="0" y="252" width="560" height="14" fill="#cfc8b6"/>
+  <path d="M0 259h560" stroke="#8d8573" stroke-width="2" stroke-dasharray="10 8"/>
+  <rect x="50" y="228" width="130" height="52" rx="4" fill="#fbf9f4" stroke="#8d8573"/>
+  <text x="115" y="259" text-anchor="middle" fill="#2e2a24">みどり台駅</text>
+  <text x="188" y="244" fill="#6b6455" font-size="12">東口</text>
+  <!-- signal -->
+  <circle cx="290" cy="193" r="7" fill="#7a9a5a"/>
+  <text x="290" y="226" text-anchor="middle" fill="#6b6455" font-size="12">信号</text>
+  <!-- convenience store on the corner -->
+  <rect x="396" y="128" width="84" height="40" rx="3" fill="#e2dccb"/>
+  <text x="438" y="153" text-anchor="middle" fill="#2e2a24" font-size="12">コンビニ</text>
+  <!-- the building, on the left of the side street -->
+  <rect x="250" y="36" width="96" height="70" rx="3" fill="#4d6239"/>
+  <text x="298" y="66" text-anchor="middle" fill="#fff" font-size="12">グリーンビル</text>
+  <text x="298" y="86" text-anchor="middle" fill="#fff" font-size="12">2階</text>
+  <!-- route -->
+  <path d="M200 236v-43h173v-122h-14" fill="none" stroke="#8a6a4a" stroke-width="3" stroke-dasharray="6 5" stroke-linecap="round"/>
+  <path d="M360 65l-9 6 9 6" fill="none" stroke="#8a6a4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="16" y="22" fill="#6b6455" font-size="11">※略図です（縮尺は正確ではありません）</text>
+</svg>

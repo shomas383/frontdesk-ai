@@ -1,7 +1,7 @@
 """Smoke test a deployed front desk: wait for /health (optionally a specific release), then ask 3 questions.
 
 Usage: python deploy/smoke.py https://demo.shomasawa.com [--expect-version v0.4.0] [--timeout 900]
-       [--embed-origin https://komorebi.shomasawa.com]
+       [--embed-origin https://komorebi.shomasawa.com] [--homepage https://komorebi.shomasawa.com]
 
 Standard library only, so it runs in CI without installing the app. The questions are eval questions
 whose behavior has been stable across every labeled run; each one costs a real LLM call.
@@ -64,6 +64,30 @@ def check_framing(base: str, embed_origin: str) -> list[str]:
     return failures
 
 
+def check_homepage(url: str, timeout: float = 300) -> list[str]:
+    """The demo clinic's homepage is up, embeds the widget, and refuses framing. Retries while Caddy gets
+    its certificate (the first deploy after the DNS record is created). No LLM calls."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            with urllib.request.urlopen(url, timeout=30) as res:
+                html = res.read().decode("utf-8")
+                csp = res.headers.get("Content-Security-Policy", "")
+            break
+        except (urllib.error.URLError, OSError) as e:
+            if time.monotonic() + 15 > deadline:
+                return [f"homepage {url} not reachable: {e}"]
+            print(f"waiting for the homepage ({e}); retry in 15s", flush=True)
+            time.sleep(15)
+    failures = []
+    if f'data-tenant="{TENANT}"' not in html or "/widget.js" not in html:
+        failures.append("homepage: widget tag missing")
+    if "frame-ancestors 'none'" not in csp:
+        failures.append(f"homepage: CSP without frame-ancestors 'none': {csp!r}")
+    print(f"{'FAIL' if failures else 'ok  '} homepage {url}")
+    return failures
+
+
 def wait_for_health(base: str, expect_version: str | None, timeout: float) -> dict:
     """Poll /health until it is ok (and reports expect_version), backing off up to 30 s between tries.
 
@@ -96,12 +120,15 @@ def main() -> int:
     parser.add_argument("--expect-version", help="wait until /health reports this version (the git tag)")
     parser.add_argument("--timeout", type=float, default=900, help="seconds to wait for /health")
     parser.add_argument("--embed-origin", default=EMBED_ORIGIN, help="the site expected to be allowed to frame /embed")
+    parser.add_argument("--homepage", help="also check the demo clinic's homepage at this URL")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
     wait_for_health(base, args.expect_version, args.timeout)
 
     failures = check_framing(base, args.embed_origin)
+    if args.homepage:
+        failures += check_homepage(args.homepage)
     for qid, question, behavior, source in CHECKS:
         status, body = get_json(f"{base}/chat", {"tenant": TENANT, "message": question}, timeout=60)
         ok = (status == 200 and body.get("behavior") == behavior

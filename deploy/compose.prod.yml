@@ -77,11 +77,13 @@ services:
     image: caddy:2.11.6-alpine
     environment:
       DOMAIN: ${DOMAIN:-demo.shomasawa.com}
+      HOMEPAGE_DOMAIN: ${HOMEPAGE_DOMAIN:-komorebi.shomasawa.com}
     ports:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites/komorebi:/srv/komorebi:ro  # the demo clinic's homepage (static)
       - caddy_data:/data  # certificates and ACME account; keeps us clear of Let's Encrypt rate limits
       - caddy_config:/config
     depends_on:

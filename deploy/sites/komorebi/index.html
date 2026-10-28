@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4d6239">
+  <meta name="description" content="架空の整体院「こもれび整体院」のデモサイトです。AIフロントデスクの埋め込みデモとして作成しています。">
+  <meta name="robots" content="noindex">
+  <title>こもれび整体院｜みどり台駅 東口徒歩4分の整体院（デモサイト）</title>
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="site.js" defer></script>
+  <script src="https://demo.shomasawa.com/widget.js" data-tenant="komorebi-seitai-demo" data-offset-bottom="64" async></script>
+</head>
+<body>
+  <p class="demo-ribbon" role="note">これはAIフロントデスクのデモ用に作成した<strong>架空の整体院</strong>のサイトです。<span class="nowrap">お電話</span>・LINEでのご予約はできません。</p>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="logo" href="#top" aria-label="こもれび整体院 トップへ">
+        <img src="logo.svg" alt="" width="40" height="40">
+        <span class="logo-text"><span class="logo-sub">みどり台の整体院</span>こもれび整体院</span>
+      </a>
+      <div class="header-contact">
+        <p class="header-tel"><span class="tel-label">ご予約・お問い合わせ</span><span class="tel-number">000-000-0000</span><span class="tel-note">月火木金 10:00〜20:00／土 9:00〜18:00／日祝 10:00〜17:00</span></p>
+        <span class="btn btn-line is-demo" aria-disabled="true">LINEで予約<small>デモ</small></span>
+        <button class="btn btn-ask js-ask" type="button">AI受付に質問</button>
+      </div>
+    </div>
+    <nav class="global-nav" aria-label="ページ内メニュー">
+      <a href="#features">当院の特徴</a>
+      <a href="#menu">料金表</a>
+      <a href="#flow">初めての方へ</a>
+      <a href="#faq">よくある質問</a>
+      <a href="#access">営業時間・アクセス</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-photo">
+        <img src="img/hero-leaves.webp" alt="木々の葉のあいだから差し込む光" width="1600" height="1200">
+      </div>
+      <div class="hero-copy">
+        <p class="hero-lead">みどり台駅 東口から徒歩4分</p>
+        <h1 class="hero-title">木漏れ日のような、<br>やさしい時間を。</h1>
+        <p class="hero-text">こもれび整体院は、お一人おひとりのお話をじっくり伺うことを大切にしている、完全予約制の整体院です。お仕事帰りや、お買い物のついでに。どうぞ肩の力を抜いてお越しください。</p>
+        <ul class="hero-points">
+          <li>完全予約制</li>
+          <li>LINE・Web予約は24時間受付</li>
+          <li>専用駐車場 2台</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="news" aria-labelledby="news-title">
+      <div class="inner">
+        <h2 class="news-title" id="news-title"><span lang="en">NEWS</span>お知らせ</h2>
+        <dl class="news-list">
+          <dt><time datetime="2026-10-15">2026.10.15</time></dt>
+          <dd>11月12日（木）は、院長の研修参加のため<strong>臨時休業</strong>とさせていただきます。</dd>
+          <dt><time datetime="2026-10-01">2026.10.01</time></dt>
+          <dd>年末年始の営業：12月29日（火）は10:00〜15:00の短縮営業（最終受付14:00）、12月30日（水）〜1月3日（日）は休業いたします。</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="inner">
+        <header class="sec-head">
+          <p class="sec-en" lang="en">FEATURES</p>
+          <h2 id="features-title">当院の特徴</h2>
+        </header>
+
+        <div class="feature">
+          <img class="feature-photo" src="img/room.webp" alt="木の床に光が差し込む、落ち着いた室内" width="1000" height="667" loading="lazy">
+          <div class="feature-body">
+            <p class="feature-num" lang="en">01</p>
+            <h3>まずは、お話をじっくり伺います</h3>
+            <p>初めての方には問診票をご記入いただき、現在のお悩みや生活習慣などを伺ってから、姿勢や体の動きを確認します。施術のあとは、ご自宅でできるセルフケアもお伝えしています。</p>
+          </div>
+        </div>
+
+        <div class="feature is-reverse">
+          <img class="feature-photo" src="img/treatment-bed.webp" alt="窓からの光が入る施術ベッド" width="1000" height="667" loading="lazy">
+          <div class="feature-body">
+            <p class="feature-num" lang="en">02</p>
+            <h3>ボキボキ鳴らす施術は行いません</h3>
+            <p>強さの感じ方は人それぞれですので、力加減は施術中でも遠慮なくお申し付けください。</p>
+            <p class="note">※強い痛みやしびれがある場合、急に症状が出た場合は、まず医療機関の受診をおすすめしております。</p>
+          </div>
+        </div>
+
+        <ul class="feature-list">
+          <li>
+            <p class="feature-num" lang="en">03</p>
+            <h3>LINE・Webで24時間ご予約</h3>
+            <p>LINE・Webからのご予約は24時間受け付けています。当日のご予約は、空きがあればLINEまたはお電話で承ります。</p>
+          </li>
+          <li>
+            <p class="feature-num" lang="en">04</p>
+            <h3>駅から徒歩4分、駐車場もあります</h3>
+            <p>みどり台駅 東口から徒歩4分。建物裏に当院専用の駐車場が2台分ございます。</p>
+          </li>
+          <li>
+            <p class="feature-num" lang="en">05</p>
+            <h3>お仕事帰りでも、そのままどうぞ</h3>
+            <p>お着替え（Tシャツ・ハーフパンツ）の無料貸し出しと、鍵付きのロッカーをご用意しています。</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section section-tint" id="menu" aria-labelledby="menu-title">
+      <div class="inner">
+        <header class="sec-head">
+          <p class="sec-en" lang="en">MENU</p>
+          <h2 id="menu-title">料金表</h2>
+          <p class="sec-lead">2026年4月1日改定　※表示価格はすべて税込です</p>
+        </header>
+
+        <div class="menu-grid">
+          <div class="menu-block">
+            <h3>コース料金</h3>
+            <table class="price-table">
+              <thead><tr><th scope="col">コース</th><th scope="col">時間</th><th scope="col">料金</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">整体ショート</th><td>30分</td><td class="price">4,400円</td></tr>
+                <tr><th scope="row">全身整体</th><td>60分</td><td class="price">7,150円</td></tr>
+                <tr><th scope="row">全身整体ロング</th><td>90分</td><td class="price">9,900円</td></tr>
+              </tbody>
+            </table>
+            <p class="note">※初めての方は、別途 初検料 2,200円をいただきます。最終来院日から3ヶ月以上空いた場合も、再度初検料をいただきます。</p>
+
+            <h3>オプション</h3>
+            <table class="price-table">
+              <tbody>
+                <tr><th scope="row">骨盤調整<small>60分・90分コースのみ</small></th><td class="price">+1,100円</td></tr>
+                <tr><th scope="row">ヘッドケア（10分）<small>全コースに追加可能</small></th><td class="price">+1,650円</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="menu-block">
+            <div class="first-offer">
+              <p class="first-offer-label">初回限定（LINE友だち登録の方）</p>
+              <p class="first-offer-price">全身整体60分<span>初検料込み</span><strong>4,980円</strong></p>
+              <p class="note">※初めてご来院の方のみ、1回限り。学生割引など他の割引との併用はできません。</p>
+            </div>
+
+            <h3>回数券</h3>
+            <table class="price-table">
+              <tbody>
+                <tr><th scope="row">全身整体60分 × 5回</th><td class="price">32,000円</td></tr>
+                <tr><th scope="row">全身整体ロング90分 × 5回</th><td class="price">44,000円</td></tr>
+              </tbody>
+            </table>
+            <p class="note">※有効期限は購入日から6ヶ月です（延長はいたしかねます）。ご本人様のみご利用いただけます。</p>
+
+            <h3>学生割引</h3>
+            <p>高校生・大学生・専門学校生の方は、各コース料金から<strong>550円引き</strong>。ご来院時に学生証をご提示ください。</p>
+            <p class="note">※回数券・初回限定価格には適用されません。</p>
+          </div>
+        </div>
+
+        <div class="menu-foot">
+          <dl class="pay">
+            <dt>お支払い方法</dt>
+            <dd>現金／クレジットカード（VISA・Mastercard・JCB・American Express）／PayPay／交通系ICカード</dd>
+          </dl>
+          <p class="note">※回数券のご購入は、現金またはクレジットカードのみとなります。</p>
+          <p class="note">※当院の施術は健康保険の対象外です（全額自費となります）。</p>
+          <dl class="cancel">
+            <dt>キャンセルについて</dt>
+            <dd>ご予約日の前日20:00までのキャンセルは無料です。前日20:00以降〜当日のキャンセルは施術料金の50%、ご連絡のないキャンセルは100%を、キャンセル料として頂戴しております。</dd>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="flow" aria-labelledby="flow-title">
+      <div class="inner">
+        <header class="sec-head">
+          <p class="sec-en" lang="en">FLOW</p>
+          <h2 id="flow-title">初めての方へ</h2>
+          <p class="sec-lead">初回は、カウンセリングと姿勢チェックを含めて約90分です（60分コースの場合）。</p>
+        </header>
+        <ol class="flow">
+          <li><h3>ご予約</h3><p>LINE・Web・お電話からご予約いただけます。</p></li>
+          <li><h3>ご来院</h3><p>ご予約時間の10分前にお越しください。</p></li>
+          <li><h3>問診票のご記入</h3><p>現在のお悩みや生活習慣などをご記入いただきます。</p></li>
+          <li><h3>カウンセリング・姿勢チェック</h3><p>お話をじっくり伺い、姿勢や体の動きを確認します。</p></li>
+          <li><h3>施術</h3><p>お体の状態に合わせて施術を行います。</p></li>
+          <li><h3>ご説明・お会計</h3><p>お体の状態のご説明と、ご自宅でできるセルフケアをお伝えします。次回のご予約も承ります。</p></li>
+        </ol>
+        <div class="flow-notes">
+          <img class="flow-photo" src="img/towels.webp" alt="窓辺にたたまれたタオルと小さな観葉植物" width="1000" height="668" loading="lazy">
+          <dl>
+            <dt>服装・持ち物</dt>
+            <dd>動きやすい服装でお越しください。特別な持ち物はございません（学生割引をご利用の方は学生証をお持ちください）。</dd>
+            <dt>2回目以降</dt>
+            <dd>所要時間は、各コースの施術時間＋10分程度が目安です。</dd>
+          </dl>
+          <p class="note">※施術前に、ネックレスや時計などのアクセサリーは外していただきます。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tint" id="message" aria-labelledby="message-title">
+      <div class="inner message">
+        <img class="message-photo" src="img/shoji-corridor.webp" alt="障子越しにやわらかな光が入る木の廊下" width="1000" height="665" loading="lazy">
+        <div class="message-body">
+          <header class="sec-head">
+            <p class="sec-en" lang="en">MESSAGE</p>
+            <h2 id="message-title">院長あいさつ</h2>
+          </header>
+          <p>はじめまして。こもれび整体院 院長です。</p>
+          <p>院名の「こもれび」は、子どものころによく遊んだ近所の公園で、木々のあいだから差し込む光が好きだったことにちなんでいます。</p>
+          <p>会社員としてデスクワーク中心の仕事をしていた頃、通っていた整体院で、施術の前に時間をかけて話を聞いてもらえたことがとても印象に残っています。一人ひとりとゆっくり向き合える場所をつくりたいと思ったのが、この仕事を始めたきっかけです。</p>
+          <p>休日は愛犬（柴犬）との散歩と、地元のパン屋さん巡りを楽しんでいます。地域の皆さまが気軽に立ち寄れる、木漏れ日のようにやさしい場所でありたいと思っています。</p>
+          <p class="signature">こもれび整体院 院長</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq" aria-labelledby="faq-title">
+      <div class="inner">
+        <header class="sec-head">
+          <p class="sec-en" lang="en">FAQ</p>
+          <h2 id="faq-title">よくある質問</h2>
+          <p class="sec-lead">そのほかのご質問は、AI受付（画面右下のボタン）でもお気軽にどうぞ。</p>
+        </header>
+        <div class="faq">
+          <details><summary>健康保険は使えますか？</summary><p>当院の施術は健康保険の対象外です。全額自費となります。</p></details>
+          <details><summary>予約なしでも受けられますか？</summary><p>当院は完全予約制のため、ご予約のない方の施術はお受けしておりません。当日のご予約は、空きがあれば承りますので、LINEまたはお電話でお問い合わせください。</p></details>
+          <details><summary>着替えは必要ですか？</summary><p>動きやすい服装でお越しいただければ、そのままで大丈夫です。お着替え（Tシャツ・ハーフパンツ）の無料貸し出しもございます。</p></details>
+          <details><summary>施術は痛くないですか？</summary><p>骨をボキボキ鳴らすような施術は行っておりません。力加減は施術中にいつでもお申し付けください。</p></details>
+          <details><summary>子どもも受けられますか？</summary><p>小学生以上の方から施術を承っております。中学生以下の方は、保護者の方の同伴をお願いしております。</p></details>
+          <details><summary>強い痛みやしびれがある場合は？</summary><p>強い痛みやしびれがある場合や、急に症状が出た場合は、まず医療機関の受診をおすすめしております。</p></details>
+          <details><summary>個室ですか？</summary><p>施術スペースはカーテンで仕切った半個室です。</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tint" id="access" aria-labelledby="access-title">
+      <div class="inner">
+        <header class="sec-head">
+          <p class="sec-en" lang="en">ACCESS</p>
+          <h2 id="access-title">営業時間・アクセス</h2>
+        </header>
+        <div class="access-grid">
+          <div>
+            <table class="hours-grid">
+              <caption>営業時間</caption>
+              <thead>
+                <tr><th scope="col">時間</th><th scope="col">月</th><th scope="col">火</th><th scope="col">水</th><th scope="col">木</th><th scope="col">金</th><th scope="col">土</th><th scope="col">日祝</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">9:00〜10:00</th><td class="no">×</td><td class="no">×</td><td class="no">×</td><td class="no">×</td><td class="no">×</td><td>○</td><td class="no">×</td></tr>
+                <tr><th scope="row">10:00〜17:00</th><td>○</td><td>○</td><td class="no">×</td><td>○</td><td>○</td><td>○</td><td>○</td></tr>
+                <tr><th scope="row">17:00〜20:00</th><td>○</td><td>○</td><td class="no">×</td><td>○</td><td>○</td><td>▲</td><td class="no">×</td></tr>
+              </tbody>
+            </table>
+            <ul class="hours-notes">
+              <li class="note">▲ 土曜は18:00まで</li>
+              <li class="note">※最終受付：月火木金 19:00／土 17:00／日祝 16:00（60分コースの場合）。90分コースは、最終受付の30分前までにご来院ください。</li>
+              <li class="note">※定休日：毎週水曜日（祝日の場合も休業）</li>
+            </ul>
+          </div>
+          <div>
+            <dl class="address">
+              <dt>住所</dt>
+              <dd>〒000-0000 架空県みどり市中央2-3-5 グリーンビル2階<br><small>（1階はパン屋さんです）</small></dd>
+              <dt>電車</dt>
+              <dd>みどり台駅 東口から徒歩4分</dd>
+              <dt>バス</dt>
+              <dd>「中央二丁目」バス停から徒歩1分</dd>
+              <dt>お車</dt>
+              <dd>建物裏に専用駐車場 2台（No.5・No.6）。満車の場合は近隣のコインパーキングをご利用ください（駐車料金のサービスはございません）。</dd>
+              <dt>自転車</dt>
+              <dd>建物前の駐輪スペースをご利用いただけます。</dd>
+            </dl>
+            <figure class="map">
+              <img src="map.svg" alt="略地図：みどり台駅東口を出て右へ、1つ目の信号を渡りコンビニの角を左へ。左手にグリーンビル。" width="560" height="300" loading="lazy">
+              <figcaption>東口を出て右へ進み、1つ目の信号を渡ってコンビニの角を左に曲がると、左手にグリーンビルがございます。</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="inner footer-inner">
+      <div>
+        <p class="footer-name">こもれび整体院</p>
+        <p>〒000-0000 架空県みどり市中央2-3-5 グリーンビル2階<br>TEL 000-000-0000　定休日：水曜日</p>
+      </div>
+      <div class="footer-demo">
+        <p>このサイトは、<a href="https://demo.shomasawa.com">AIフロントデスク</a>の埋め込みデモのために作成した架空の整体院のサイトです。実在の院・人物・住所とは関係ありません。</p>
+        <p class="credit">Photos: Ester Avanesyan, Daniel Chen, Mayur Roxan, Sven Mieke, Ryunosuke Kikuno (Unsplash)</p>
+      </div>
+    </div>
+  </footer>
+
+  <nav class="callbar" aria-label="ご予約・お問い合わせ">
+    <span class="callbar-item is-demo" aria-disabled="true"><span>電話</span><small>デモ</small></span>
+    <span class="callbar-item callbar-line is-demo" aria-disabled="true"><span>LINE予約</span><small>デモ</small></span>
+    <button class="callbar-item callbar-ask js-ask" type="button"><span>質問する</span><small>AI受付</small></button>
+  </nav>
+</body>
+</html>

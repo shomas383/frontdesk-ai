@@ -25,3 +25,19 @@
 	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy app:8000
 }
+
+# The fictional clinic's homepage (komorebi.shomasawa.com in production): static files from
+# deploy/sites/komorebi, embedding the chat with one <script> tag like a real client site would.
+# Its only third party is us: widget.js from {$DOMAIN}, which frames {$DOMAIN}/embed.
+{$HOMEPAGE_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		Content-Security-Policy "default-src 'none'; script-src 'self' https://{$DOMAIN}; frame-src https://{$DOMAIN}; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		X-Frame-Options DENY
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+	root * /srv/komorebi
+	file_server
+}

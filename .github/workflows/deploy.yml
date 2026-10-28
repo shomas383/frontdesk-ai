@@ -23,6 +23,7 @@ concurrency:
 env:
   IMAGE: ghcr.io/shomas383/frontdesk-ai # must match image_repo in infra/variables.tf
   SITE: https://demo.shomasawa.com
+  HOMEPAGE: https://komorebi.shomasawa.com # the demo clinic's site; needs its DNS record first
 
 jobs:
   test:
@@ -100,4 +101,4 @@ jobs:
       - name: Wait for the release, then ask 3 questions
         env:
           TAG: ${{ github.ref_name }}
-        run: python deploy/smoke.py "$SITE" --expect-version "$TAG" --timeout 1200
+        run: python deploy/smoke.py "$SITE" --expect-version "$TAG" --timeout 1200 --homepage "$HOMEPAGE"
