@@ -297,7 +297,7 @@ The site is down while the app restarts on each deploy, as it ingests the docs a
 | Memory after deploy | `free -h`: 968 Mi used of 1.9 Gi, 868 Mi buff/cache, 761 Mi available; swap 99 Mi used of 2.0 Gi. `docker stats`: app 931 MiB, db 43 MiB, caddy 18 MiB |
 | Per-IP limit | 11 parallel `POST /chat` from one IP: 10× 200 and 1× 429 (`Retry-After: 51`). A person in a browser can't trigger it, since each answer takes several seconds |
 | Stop / start | Back ~2.5 min after start (boot, ingest, uvicorn), with no redeploy; same Elastic IP, certificate still valid |
-| Answer latency | 8–9 s (sometimes 5–7 s), compared with 1.45 s median locally (LLM 1.30 s + everything else 0.15 s, over 210 eval rows). CPU credits are ruled out: balance ~38 and rising, CPU 2–3% when idle. Root cause: the model weights were re-read from disk on every question (see [Resize to t3.medium](#resize-to-t3medium-2026-10-27)) |
+| Answer latency | 8–9 s (sometimes 5–7 s), compared with 1.45 s median locally (LLM 1.30 s + everything else 0.15 s, over 210 eval rows). CPU credits are ruled out: balance ~38 and rising, CPU 2–3% when idle. Root cause: the model weights were re-read from disk on every question. Fixed by moving to a t3.medium: median 1.84 s (see [Resize to t3.medium](#resize-to-t3medium-2026-10-27)) |
 | Rollback test (with v0.4.1) | Passed. The host's `history.log` digest for v0.4.1 equals the GHCR `:v0.4.1` digest (the `--prefer-index=false` fix). Re-running the v0.4.0 run brought back `/health` `v0.4.0` (`f39cef3`); re-running the v0.4.1 run restored `v0.4.1` (`0a1be25`) |
 
 #### Resize to t3.medium (2026-10-27)
@@ -308,13 +308,16 @@ On the t3.small, almost all of the answer time was spent outside the LLM:
 
 The app's process memory (~0.7 GB) and bge-m3's memory-mapped `model.safetensors` (~1.1 GB read per question) didn't both fit in RAM on a 2 GB box. The kernel dropped the weights from the page cache between questions, so every embedding re-read them from EBS. That read is capped by gp3's 125 MB/s baseline: 1.1 GB ÷ 125 MB/s ≈ 9 s.
 
-The fix is the 4 GB t3.medium (`instance_type` in `infra/variables.tf`). Terraform changes the type in place (stop, modify, start), keeping the instance, its volume and the Elastic IP.
+The fix is the 4 GB t3.medium (`instance_type` in `infra/variables.tf`). Terraform changed the type in place (stop, modify, start). `terraform apply` reported 0 added, 1 changed, 0 destroyed and took 43 s. The Elastic IP stayed the same, and the site came back without a redeploy.
 
 | | t3.small (before) | t3.medium (after) |
 |---|---|---|
-| Latency split, median total / LLM / other | 10,268 / 1,482 / 8,771 ms (n=31) | pending |
-| `vmstat` during a question | `bi` 120k–230k KB/s for ~9 s, `wa` 43–65% | pending |
-| `free -h` | 968 Mi used of 1.9 Gi, 99 Mi swap | pending |
+| Latency split, median total / LLM / other | 10,268 / 1,482 / 8,771 ms (n=31, 2 days) | **1,839 / 1,419 / 350 ms** (n=7, 1 hour) |
+| Latency p90 | 10,770 ms | 2,165 ms |
+| `vmstat 1` during a question | `bi` 120k–230k KB/s for ~9 s, `wa` 43–65% | `bi` 0 (one blip of 256), `wa` 0%, `si`/`so` 0; `us` peaks of 21–24% while embedding on the CPU |
+| `free -h` | 968 Mi used of 1.9 Gi, 99 Mi swap | 1.2 Gi used of 3.7 Gi, 2.4 Gi buff/cache, 2.3 Gi available; 0 B swap |
+
+Answers are now 5.6× faster overall. The non-LLM part is 25× faster, and LLM time is unchanged. The weights stay in the page cache, so a question no longer reads from disk. What's left is the LLM call plus about 0.35 s of embedding, the DB query and the guardrail. That's above the 0.15 s seen locally, which is expected: two burstable vCPUs are slower than the dev machine. The "after" sample is small (n=7).
 
 ### Operating it
 

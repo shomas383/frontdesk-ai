@@ -32,7 +32,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
       - per-IP 429 after 10 requests
       - stop/start recovers in ~2.5 min with no redeploy
       - no visitor IPs in CloudWatch
-      - memory: 968 Mi used of 1.9 Gi, 99 Mi swap
+      - memory: 968 Mi used of 1.9 Gi, 99 Mi swap on the t3.small; 1.2 Gi used of 3.7 Gi, 0 B swap on the t3.medium
       - **rollback:**
         - re-running the v0.4.0 run brought back `/health` v0.4.0 (`f39cef3`)
         - re-running the v0.4.1 run restored v0.4.1 (`0a1be25`)
@@ -41,13 +41,16 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
       - Caddy's log filter also deletes the top-level `remote`, `remote_ip` and `client_ip` fields
       - `/models/xet/logs` is removed in the image
       - `:prod` copies the manifest (`--prefer-index=false`)
-    - **Latency: root cause found (page-cache thrash); fix applied in Terraform, verification pending.**
-      - On the t3.small, prod answers took ~10 s, against 1.45 s locally.
-      - Logs Insights split (n=31): median total 10,268 ms, LLM 1,482 ms, other 8,771 ms.
-      - `vmstat` during a question showed `bi` 120k–230k KB/s for ~9 s and `wa` 43–65%. bge-m3's memory-mapped weights (~1.1 GB) were re-read from EBS on every query, capped by gp3's 125 MB/s.
-      - Docker Desktop doesn't reproduce it, because the mapped file isn't charged to the container.
-      - **Fix:** `instance_type` default `t3.medium` (in-place stop/modify/start). After apply, re-run the latency split, `vmstat` and `free -h`, then fill in the README table "Resize to t3.medium".
-      - Still open: the image carries an apparently unused second copy of the weights (`pytorch_model.bin`, 2.27 GB, in another snapshot).
+    - **Latency: fixed (2026-10-27) by moving to t3.medium.** See README "Resize to t3.medium".
+      - **Cause:** page-cache thrash on the 2 GB t3.small. bge-m3's memory-mapped weights (~1.1 GB) were re-read from EBS on every query, capped by gp3's 125 MB/s.
+        - `vmstat` showed `bi` 120k–230k KB/s for ~9 s and `wa` 43–65%.
+        - Docker Desktop doesn't reproduce it, because the mapped file isn't charged to the container.
+      - **Latency split, median total / LLM / other:**
+        - before (n=31): 10,268 / 1,482 / 8,771 ms, p90 10,770
+        - after (n=7): 1,839 / 1,419 / 350 ms, p90 2,165
+      - **After the fix:** `vmstat` shows `bi` 0 and `wa` 0%. `free -h`: 1.2 Gi used of 3.7 Gi, 2.3 Gi available, 0 B swap.
+      - **Apply:** in place, 0 added / 1 changed / 0 destroyed in 43 s, with the same EIP and no redeploy.
+      - **Still open:** the image carries an apparently unused second copy of the weights (`pytorch_model.bin`, 2.27 GB, in another snapshot).
     - **Target:** EC2 **t3.medium** (4 GB, 2 GB swap) in **us-east-2**, running Docker Compose: Caddy → app → Postgres/pgvector. It was t3.small (2 GB) until 2026-10-27.
     - **Domain:** `shomasawa.com`, registered at **Cloudflare**, with DNS in Cloudflare (a DNS-only A record managed by Terraform). Don't use Route 53; registering the domain there failed on this account.
     - **Demo URL:** `https://demo.shomasawa.com`.
