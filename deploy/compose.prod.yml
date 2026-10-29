@@ -52,6 +52,10 @@ services:
       RATE_LIMIT_PER_DAY: ${RATE_LIMIT_PER_DAY:-50}
       DAILY_QUESTION_CAP: ${DAILY_QUESTION_CAP:-500}
       DAILY_TOKEN_BUDGET: ${DAILY_TOKEN_BUDGET:-2000000}
+      # LINE Official Account (src/line.py): /frontdesk-ai/prod/LINE_* SecureStrings. Optional: if
+      # either is missing, /line/webhook is not registered and the rest of the app runs as before.
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET:-}
+      LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN:-}
     depends_on:
       db:
         condition: service_healthy

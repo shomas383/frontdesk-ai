@@ -1,6 +1,7 @@
 """Smoke test a deployed front desk: wait for /health (optionally a specific release), then ask 3 questions.
 
 Usage: python deploy/smoke.py https://demo.shomasawa.com [--expect-version v0.4.0] [--timeout 900]
+       [--no-line]
        [--embed-origin https://komorebi.shomasawa.com] [--homepage https://komorebi.shomasawa.com]
 
 Standard library only, so it runs in CI without installing the app. The questions are eval questions
@@ -64,6 +65,20 @@ def check_framing(base: str, embed_origin: str) -> list[str]:
     return failures
 
 
+def check_line_webhook(base: str) -> list[str]:
+    """/line/webhook is enabled (both LINE secrets reached the app) and refuses a bad signature: 401.
+    A 404 means the route is off. No LINE or LLM call: nothing past the signature check runs."""
+    req = urllib.request.Request(f"{base}/line/webhook", data=b'{"events": []}', method="POST",
+                                 headers={"Content-Type": "application/json", "x-line-signature": "smoke-test"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            status = res.status
+    except urllib.error.HTTPError as e:
+        status = e.code
+    print(f"{'ok  ' if status == 401 else 'FAIL'} /line/webhook with a bad signature: HTTP {status}")
+    return [] if status == 401 else [f"/line/webhook: expected 401 for a bad signature, got {status}"]
+
+
 def check_homepage(url: str, timeout: float = 300) -> list[str]:
     """The demo clinic's homepage is up, embeds the widget, and refuses framing. Retries while Caddy gets
     its certificate (the first deploy after the DNS record is created). No LLM calls."""
@@ -121,6 +136,7 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=900, help="seconds to wait for /health")
     parser.add_argument("--embed-origin", default=EMBED_ORIGIN, help="the site expected to be allowed to frame /embed")
     parser.add_argument("--homepage", help="also check the demo clinic's homepage at this URL")
+    parser.add_argument("--no-line", action="store_true", help="skip the /line/webhook check")
     args = parser.parse_args()
     base = args.base_url.rstrip("/")
 
@@ -129,6 +145,8 @@ def main() -> int:
     failures = check_framing(base, args.embed_origin)
     if args.homepage:
         failures += check_homepage(args.homepage)
+    if not args.no_line:
+        failures += check_line_webhook(base)
     for qid, question, behavior, source in CHECKS:
         status, body = get_json(f"{base}/chat", {"tenant": TENANT, "message": question}, timeout=60)
         ok = (status == 200 and body.get("behavior") == behavior

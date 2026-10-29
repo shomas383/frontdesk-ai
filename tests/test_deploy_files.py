@@ -51,6 +51,21 @@ def test_app_environment_matches_the_demo_setup(compose):
     assert "EXTRA_FRAME_ANCESTORS" not in (DEPLOY_DIR / "compose.prod.yml").read_text(encoding="utf-8")
 
 
+def test_line_secrets_are_passed_through_and_optional(compose):
+    env = compose["services"]["app"]["environment"]
+    # Only from Parameter Store via .env; an empty default, so a missing parameter disables LINE.
+    assert env["LINE_CHANNEL_SECRET"] == "${LINE_CHANNEL_SECRET:-}"
+    assert env["LINE_CHANNEL_ACCESS_TOKEN"] == "${LINE_CHANNEL_ACCESS_TOKEN:-}"
+    deploy = (DEPLOY_DIR / "deploy.sh").read_text(encoding="utf-8")
+    required = re.search(r"^for required in (.*); do$", deploy, re.MULTILINE).group(1).split()
+    assert required == ["ANTHROPIC_API_KEY", "POSTGRES_PASSWORD"]
+
+
+def test_smoke_checks_the_line_webhook():
+    smoke = (DEPLOY_DIR / "smoke.py").read_text(encoding="utf-8")
+    assert "check_line_webhook(base)" in smoke and "== 401" in smoke
+
+
 def test_app_runs_one_worker_without_access_log(compose):
     command = " ".join(compose["services"]["app"]["command"])
     assert "--workers 1" in command and "--no-access-log" in command
