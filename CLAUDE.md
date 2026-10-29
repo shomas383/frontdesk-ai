@@ -74,12 +74,22 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - **Answer path unchanged**, so no eval rerun.
     - **Release order:** `terraform plan` (1 to add) → apply → `nslookup komorebi.shomasawa.com` → push main → tag v0.5.0 → smoke (framing headers + homepage) → `python scripts/browser_check.py --site https://komorebi.shomasawa.com`. DNS goes first so Caddy's first certificate attempt succeeds.
 
+  - **Step 4 (LINE Official Account): built, not yet released (target v0.6.0).** 「こもれび整体院（デモ）」 `@460ptstn`, Messaging API, free plan. See README "LINE Official Account".
+    - **Webhook:** `POST /line/webhook` (`src/line.py`), registered only when `LINE_CHANNEL_SECRET` and `LINE_CHANNEL_ACCESS_TOKEN` are both set. `x-line-signature` is checked on the raw body first (`src/line_signature.py`): 400 missing, 401 invalid. Then 200 at once, and the events are handled in a background task.
+    - **Reply only, never push** (tests enforce it). An event over 50 s old, or a `token_invalid` reply, is logged and dropped.
+    - **Same answer path:** `/chat` and LINE share `ask()` in `src/app.py`, which handles the daily caps, `answer_question` with no kwargs, and the log line with `channel`. **Answer path unchanged**, so no eval rerun.
+    - **Per-user limit:** keyed on the userId through its own `RateLimiter` (salted HMAC), with the same numbers as per-IP. The userId and reply token are never logged.
+    - **UX:** loading animation; quick replies from `site.json` `suggestions.line`; a demo greeting on `follow`; a fixed reply for non-text messages; group and room events ignored.
+    - **Rich menu:** `scripts/line_rich_menu.py`, run by the user, draws `scripts/line/rich_menu.png` with Noto Sans JP only (no Microsoft fonts in the committed image).
+    - **Release order:** push main → tag v0.6.0 → smoke, including the `/line/webhook` 401 check → the user's console steps (README table) → `line_rich_menu.py --apply` → live checks on a phone → CloudWatch IP and userId audits.
+
 ## Backlog (not started)
 - **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.
   - Reproduced live on 2026-10-27: 「平日の営業時間は？」 ended with 「詳しくはお気軽にお問い合わせください」.
   - Candidate prompt fix, measured as its own step (commit + 3 repeats on both sets).
   - Also count answer-behavior rows that contain handoff phrases, including 「お気軽にお問い合わせ」.
   - Check that real handoffs (q36/q54/q64) and medical redirects don't regress.
+- **LINE extras** (scope-guarded out of Step 4; listed in README Backlog): booking, push/broadcast campaigns, LIFF, multi-tenant LINE channels, `webhookEventId` dedupe, staff chat handoff.
 - **Widget extras** (scope-guarded out of Step 3.5; listed in README Backlog): theming, teaser/badge, conversation across pages, analytics, embed_origins admin, signed embed tokens, versioned widget + SRI, CORP for COEP sites, CSP report-to, `data-hide-launcher`, English UI.
 
 ## Default pipeline
@@ -124,10 +134,12 @@ An AWS Settings project account (new-account experience) with fixed SCPs.
 | `src/eval.py`, `src/metrics.py`, `src/compare.py` | eval runner (`--repeats`, `--aggregate`), pure metric functions, run-vs-run diff |
 | `src/pricing.py` | token prices + `estimate_cost_usd` (eval and API) |
 | `src/app.py` | FastAPI `POST /chat`, `GET /health`; calls `answer_question` with no feature kwargs so it always matches eval defaults (a test enforces this). JSON-line request logs on stdout, no IPs |
+| `src/line.py`, `src/line_signature.py` | LINE webhook (reply only; `LineClient` has just `reply` and `show_loading`), LINE formatting, per-user limiter; the signature check |
 | `src/limits.py`, `src/usage.py`, `src/redact.py` | per-IP rate limiter (in memory → **uvicorn must run with 1 worker**); daily question cap + token budget in Postgres `usage_daily` (JST day); phone/email redaction before logging |
-| `src/static/`, `data/<tenant>/site.json` | web chat page (`index.html`), the compact `embed.html` (served at `/embed`) and `widget.js` (served at `/widget.js`). `site.json` holds `clinic_name`, `doc_labels` (a test requires a label for every doc, so add one when adding a doc), `suggestions` (`page`/`embed`) and `embed_origins`. `?demo=` auto-send only with `DEMO_AUTOSEND=true` |
+| `src/static/`, `data/<tenant>/site.json` | web chat page (`index.html`), the compact `embed.html` (served at `/embed`) and `widget.js` (served at `/widget.js`). `site.json` holds `clinic_name`, `doc_labels` (a test requires a label for every doc, so add one when adding a doc), `suggestions` (`page`/`embed`/`line`) and `embed_origins`. `?demo=` auto-send only with `DEMO_AUTOSEND=true` |
 | `src/framing.py` | CSP `frame-ancestors` for `/embed`: only plain `https://host[:port]` origins (http only for localhost), invalid entries dropped, empty → `'none'` |
 | `deploy/sites/komorebi/` | the fictional clinic's homepage (static; served by Caddy at `HOMEPAGE_DOMAIN`). Content must match the docs (`tests/test_homepage.py`). Photos: Unsplash WebP, credited in README; `.webp` is binary in `.gitattributes` |
+| `scripts/line_rich_menu.py` | draws the LINE rich menu (`scripts/line/rich_menu.png`, Noto Sans JP only) and, with `--apply`, sets it as the default; the token comes from Parameter Store through the AWS CLI. Run by the user |
 | `scripts/browser_check.py` | Playwright check of the homepage + widget at phone/desktop widths, with the real app on test fakes (no DB/LLM). Screenshots to `.browser-check/` (gitignored). Dev only: `requirements-browser.txt` |
 | `Dockerfile`, `docker-compose.yml` | CPU torch + bge-m3 baked in. `docker compose up -d` starts only the dev db; `--profile app` adds the API, which runs `ingest --if-empty` on start |
 | `deploy/` | Production stack, shipped inside the image as `/app/deploy`:<br>• `compose.prod.yml`: Caddy + app + pgvector, awslogs; only Caddy publishes ports<br>• `Caddyfile`: no access log; client IPs filtered out of the error log<br>• `deploy.sh`: renders `/opt/frontdesk/.env` from Parameter Store, runs compose up, waits for healthy<br>• `smoke.py`: `/health` version + 3 questions<br>`tests/test_deploy_files.py` checks the prod invariants and for stray `\r` |
@@ -153,7 +165,7 @@ An AWS Settings project account (new-account experience) with fixed SCPs.
 - **Settings:** `APP_TODAY=2026-10-24` (pinned, so answers match eval), `TRUST_PROXY_HEADERS=true` (behind Caddy), `DEMO_AUTOSEND=false`, and 1 uvicorn worker. `EXTRA_FRAME_ANCESTORS` is never set (local browser checks only; a test enforces it).
 - **Homepage:** komorebi.shomasawa.com, from `deploy/sites/komorebi` (bind-mounted into Caddy). `deploy.sh` restarts Caddy on every deploy, because the release directory is replaced and a mounted directory would otherwise be served empty.
 - **Ingest:** runs in full on every container start, so the DB matches the docs in the image. A docs change ships as a new tag.
-- **Parameters:** secrets live in Parameter Store under `/frontdesk-ai/prod/`, created by the user. Never put them in git, the image or Terraform. A parameter named after a limit (e.g. `DAILY_QUESTION_CAP`) overrides it after `sudo /opt/frontdesk/pull-deploy.sh --force` on the host.
+- **Parameters:** secrets live in Parameter Store under `/frontdesk-ai/prod/`, created by the user (including `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN`, which are optional: missing → LINE off). Never put them in git, the image or Terraform. A parameter named after a limit (e.g. `DAILY_QUESTION_CAP`) overrides it after `sudo /opt/frontdesk/pull-deploy.sh --force` on the host.
 - **Releases** are tags (`v0.4.0`, …). To roll back, re-run an older tag's `deploy.yml` run.
 - **Host-side changes:** `infra/host/pull-deploy.sh` and the first-boot script only reach a host through Session Manager or a new instance (`ignore_changes = [ami, user_data]`). Everything in `deploy/` ships with the image.
 

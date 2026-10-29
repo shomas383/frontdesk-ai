@@ -32,7 +32,7 @@ hand-labeled 1,340 answers, and reviewed every plan and design decision; [CLAUDE
 **Stack:** Python · FastAPI · Postgres + pgvector · bge-m3 embeddings (CPU) · Claude Haiku 5.5 ·
 Docker Compose + Caddy on EC2 · Terraform · Cloudflare DNS · GitHub Actions
 
-**Status:** M1 and M2 complete. M4 (public demo) is live at v0.5.0, with LINE integration and a demo video next.
+**Status:** M1 and M2 complete. M4 (public demo) is live at v0.5.1; the LINE Official Account ships in v0.6.0, then a demo video.
 See the [Roadmap](#roadmap).
 
 ## How it works
@@ -62,6 +62,7 @@ question ──bge-m3──▶ top-5 cosine (+ full doc for short docs) ──�
 | [src/llm.py](src/llm.py) | Provider interface (`LLM_PROVIDER=anthropic` or `bedrock`) |
 | [src/eval.py](src/eval.py), [src/metrics.py](src/metrics.py) | Eval runner and pure metric functions |
 | [src/app.py](src/app.py), [src/limits.py](src/limits.py), [src/usage.py](src/usage.py), [src/redact.py](src/redact.py) | HTTP API (see [API](#api-local)); per-IP rate limiter; daily cap/token budget in Postgres; phone/email redaction for logs |
+| [src/line.py](src/line.py), [src/line_signature.py](src/line_signature.py) | LINE Official Account: webhook, Reply API, LINE formatting; webhook signature check (see [LINE](#line-official-account)) |
 | [deploy/](deploy/) | Production compose file (Caddy + app + pgvector), Caddyfile, `deploy.sh`, `smoke.py`; shipped inside the image |
 | [infra/](infra/) | Terraform for the EC2 host and DNS record, plus the host's pull-based deploy ([infra/README.md](infra/README.md)) |
 | [.github/workflows/](.github/workflows/) | `test.yml` (pytest + gitleaks on PRs and `main`), `deploy.yml` (a `v*` tag publishes a release) |
@@ -167,6 +168,7 @@ python -m src.compare eval\runs\<base>.jsonl eval\runs\<new>.jsonl [--carry-labe
 | `CORS_ORIGINS` | none | API: comma-separated browser origins |
 | `APP_PORT` | `8000` | host port for `docker compose --profile app up` |
 | `DEMO_AUTOSEND` | `false` | web page: allow `?demo=q1\|q2` auto-send (screenshots / demo video) |
+| `LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` | none | LINE: `/line/webhook` exists only when both are set. Production: Parameter Store |
 
 Cost: the model runs with thinking disabled, `effort: low` and `max_tokens: 500`. A full 50-question run on Haiku 5.5 costs well under $0.10.
 
@@ -199,6 +201,7 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 | `GET /` | The web chat (below) |
 | `GET /embed?tenant=<id>` | The same chat in a compact layout, for the widget's iframe (see [Embedding the widget](#embedding-the-widget)). `404` for an unknown tenant |
 | `GET /widget.js` | The one script a clinic adds to its own site. `Cache-Control: public, max-age=300` |
+| `POST /line/webhook` | LINE's webhook (only when both LINE secrets are set, otherwise `404`). `400` no `x-line-signature` · `401` bad signature · `413` body over 256 KB · `200 {}` at once, then the events are answered in the background (see [LINE](#line-official-account)) |
 | `GET /api/config[?tenant=<id>]` | `{tenant, clinic_name, doc_labels, suggestions, max_message_chars, demo_autosend}` for the page; without `tenant`, the first allowed tenant |
 
 **Protection:**
@@ -297,10 +300,50 @@ python scripts/browser_check.py --site https://komorebi.shomasawa.com        # l
 - the live browser check passed 31 of 31 checks
 - still no visitor IPs in CloudWatch, including in Caddy's certificate-validation lines for the new domain
 
+### LINE Official Account
+
+The demo clinic's LINE account, 「こもれび整体院（デモ）」 (`@460ptstn`), answers through the same path as `/chat`: retrieval, prompt v2, the guardrail, `APP_TODAY`, and the daily caps, which the two channels share. `answer_question` is called with no feature kwargs (a test checks it), so no eval rerun was needed.
+
+```
+LINE ──webhook──▶ Caddy ──▶ POST /line/webhook ── signature check on the raw body ──▶ 200 {}
+                                     └─ background: loading animation → ask() (same as /chat) → Reply API
+```
+
+- **Signature first.** `x-line-signature` is checked against the raw body (HMAC-SHA256 with the channel secret, base64, `hmac.compare_digest`) before anything is parsed. A missing header gets 400 and a wrong one 401, and nothing else runs. Source IPs aren't used.
+- **Reply only, never push.** The client in `src/line.py` has two calls: the Reply API and the loading animation. Push messages count against the free plan's 200/month; replies don't. The webhook returns 200 at once and answers in a background task. If the event is over 50 s old, or LINE says the reply token is invalid, the reply is logged and dropped. There's no push fallback, and tests check that no push, multicast, broadcast or narrowcast endpoint appears anywhere in `src/` or `scripts/`.
+- **What gets answered:**
+  - **Text in 1:1 chats** goes through the pipeline, with the loading animation while it works.
+  - **Stickers, images and so on** get a short fixed reply.
+  - **Following the account** (`follow`) gets a greeting that says it's a fictional demo clinic, that staff won't reply, and not to send personal info.
+  - **Group and room events** are ignored.
+- **LINE formatting:** plain text with the markdown removed. For `answer`, the cited docs' short labels go at the end, e.g. 「（参照：料金・メニュー／お知らせ）」. Every reply carries quick-reply buttons from `suggestions.line` in `site.json`.
+- **Limits:** a per-user limit keyed on the LINE userId, with the same numbers as the per-IP limit (10/min, 50/day) in its own in-memory limiter, keyed by a salted HMAC. Over a limit, the customer gets a short polite reply, not silence. When the daily caps are used up, the reply asks them to phone the clinic.
+- **Privacy:** the userId is used only for the loading animation and as the hashed rate-limit key. It's never logged or stored, and neither is the reply token. Questions are logged like `/chat` (`channel: "line"`, phone numbers and emails redacted), and each event adds one `event: "line"` line with the event type and the reply's outcome (`ok`, `expired`, `token_invalid`, `error:<status>`).
+- **Secrets:** `/frontdesk-ai/prod/LINE_CHANNEL_SECRET` and `/frontdesk-ai/prod/LINE_CHANNEL_ACCESS_TOKEN` (SecureString). `deploy.sh` renders them into `.env` with the rest. They're optional: without them the route isn't registered and the rest of the app runs as before. The deploy's smoke test expects 401 from `/line/webhook` for a bad signature, which proves both secrets reached the app without calling LINE or the LLM.
+
+**Rich menu:** 料金 / 営業時間 / アクセス / 質問する, from `scripts/line_rich_menu.py`. It draws `scripts/line/rich_menu.png` with simple shapes and Noto Sans JP (SIL Open Font License) only. The first three buttons send a question through the normal pipeline; 質問する is a postback that opens the keyboard. The script reads the access token from Parameter Store with the AWS CLI, so it's never pasted.
+
+```powershell
+python scripts/line_rich_menu.py            # dry run: writes the PNG and prints the menu JSON
+python scripts/line_rich_menu.py --apply    # validate, create, upload, set as default, delete older ones (needs aws login)
+```
+
+**Console settings** (LINE Developers → the channel's Messaging API tab, and LINE Official Account Manager → 応答設定):
+
+| Setting | Value |
+|---|---|
+| Webhook URL | `https://demo.shomasawa.com/line/webhook`, then **Verify** |
+| Use webhook | ON |
+| Webhook redelivery | OFF |
+| Allow bot to join group chats (グループ・複数人トークへの参加を許可する) | OFF |
+| 応答メッセージ (auto-reply) | OFF |
+| あいさつメッセージ (greeting) | OFF; the app's `follow` reply replaces it |
+| チャット | OFF (the greeting says staff won't reply) |
+
 ### Logs and retention
 
 Each request is logged as one JSON line on stdout:
-- `channel` (`web`), `question`, `tenant`, `outcome` (`answered`/`rate_limited`/`cap`/`budget`/`error`/`invalid`)
+- `channel` (`web` or `line`), `question`, `tenant`, `outcome` (`answered`/`rate_limited`/`cap`/`budget`/`error`/`invalid`)
 - `behavior`, `sources`, `guardrail_fired`, `guardrail_removed`
 - `latency_ms`, `llm_latency_ms`, `input_tokens`, `output_tokens`, `cost_usd`, `error`
 
@@ -446,6 +489,13 @@ parse @message /(?<ip>[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})/
 | sort lines desc
 ```
 
+*LINE userId audit.* LINE userIds are `U` plus 32 hex characters. Expect no results:
+
+```
+filter @message like /U[0-9a-f]{32}/
+| stats count(*) as lines by @logStream
+```
+
 *Latency split.* Separates LLM time from everything else (embedding, DB, guardrail) for answered questions:
 
 ```
@@ -568,6 +618,14 @@ See the [Roadmap](#roadmap). The automatic grader (M3) is deferred so the public
 Hybrid search and reranking were tried in M2. They remain available as `--retrieval hybrid|rerank` but are not the default.
 
 ### Backlog
+
+- **LINE, not started (scope-guarded out of M4 Step 4):**
+  - booking from LINE
+  - push or broadcast campaigns (they'd use the free plan's monthly message quota)
+  - LIFF pages
+  - several clinics' LINE channels on one deployment (one channel = the first allowed tenant today)
+  - de-duplicating redelivered webhook events by `webhookEventId` (redelivery is off)
+  - handing a LINE conversation to staff (chat mode)
 
 - **Widget, not started (scope-guarded out of M4 Step 3.5):**
   - theming and launcher position
