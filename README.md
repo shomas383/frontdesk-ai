@@ -218,7 +218,7 @@ curl -s localhost:8000/chat -H "Content-Type: application/json" \
 
 Open http://localhost:8000/. It is plain HTML/CSS/JS in [src/static/](src/static/): no build step, no CDNs, no web fonts.
 
-- **Header:** a disclaimer banner. (The "About this demo" link to this repo is removed while the repo is private.)
+- **Header:** a disclaimer banner and an "About this demo" link to this repo.
 - **Suggested-question chips:** from `suggestions.page` in `data/<tenant>/site.json`. They show off the strengths: price, holiday hours, a stale blog price, an ended campaign, and a medical question. The widget uses `suggestions.embed` instead: everyday questions a customer would ask.
 - **Under each answer:** source chips with friendly names from `data/<tenant>/site.json`, and a tag for `handoff` (スタッフにおつなぎします) or `refuse_redirect` (医療機関へのご相談をおすすめ).
 - **Input and errors:** a 300-character counter, and friendly messages for 422, 429 (with a live `Retry-After` countdown) and network errors.

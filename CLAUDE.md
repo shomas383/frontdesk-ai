@@ -157,14 +157,14 @@ An AWS Settings project account (new-account experience) with fixed SCPs.
 - **Releases** are tags (`v0.4.0`, …). To roll back, re-run an older tag's `deploy.yml` run.
 - **Host-side changes:** `infra/host/pull-deploy.sh` and the first-boot script only reach a host through Session Manager or a new instance (`ignore_changes = [ami, user_data]`). Everything in `deploy/` ships with the image.
 
-## Before going public
-Checklist for when the repo is made public (it is private for now):
+## Going public
+The repo was made public on 2026-10-28.
 - [x] gitleaks over the full history with the CI-pinned image (v8.30.1): no leaks. (v8.24.3 ignores `[[allowlists]]` and flags the `11_column_aftercare` doc ID; false positives.)
 - [x] Review `eval/`, `notes/` and the docs for personal notes, local paths and emails. `label_note` fields are kept as labeling evidence; the commit-author email stays in history (rewriting would change every SHA cited in eval summaries, tags and `/health`). New commits use the noreply address.
-- **After the user makes the repo public:**
-  - [ ] Restore the full-page chat's "About this demo" link to the repo (`src/static/index.html`; removed while private), flip the assertion in `tests/test_web.py::test_index_serves_the_chat_page`, update README "Web chat", and release it (v0.5.1).
-  - [ ] Tag ruleset `release-tags` (Settings → Rules → Rulesets; not available on private repos on the Free plan): targets `v*` and `milestone-*`, Restrict updates + Restrict deletions, no bypass. Rollback re-runs old runs and never moves a tag, so it still works.
-  - [ ] Branch ruleset for `main`: Block force pushes + Restrict deletions, no bypass. No required status checks (pushes go straight to `main`).
+- **After the repo was made public:**
+  - [x] Restore the full-page chat's "About this demo" link to the repo (`src/static/index.html`), with the test and README "Web chat" updated. Ships in v0.5.1.
+  - [x] Tag ruleset `release-tags` (Settings → Rules → Rulesets; not available on private repos on the Free plan): targets `v*` and `milestone-*`, Restrict updates + Restrict deletions, no bypass. Rollback re-runs old runs and never moves a tag, so it still works. Verified: deleting a tag is rejected with GH013.
+  - [x] Branch ruleset for `main`: Block force pushes + Restrict deletions, no bypass. No required status checks (pushes go straight to `main`).
   - [ ] Settings → Code security: secret scanning with push protection, Dependabot alerts.
   - [ ] Pin the repo on the GitHub profile. (The GHCR package is already public.)
 
