@@ -1,8 +1,39 @@
 # frontdesk-ai
 
-A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers customer questions from the clinic's own documents with citations. When the answer isn't in the documents it hands off to staff, and it never gives medical advice.
+An AI front desk for small Japanese clinics (整体院). It answers customers from the clinic's own documents
+with citations, says "staff will check" when the documents don't cover something, and never gives medical
+advice. Every change is measured on a hand-labeled eval set before it ships.
 
-**Status: Milestones 1 and 2 complete; M4 (public demo) in progress — API, web chat and AWS deploy done; live at https://demo.shomasawa.com ([Deploy](#deploy-aws)).** Dense retrieval (bge-m3 + pgvector, top-5, with short docs expanded in full) → Claude with structured JSON output → a post-generation guardrail → a 70-question eval (50 original + 20 held-out).
+**Try it:** [demo.shomasawa.com](https://demo.shomasawa.com) (full-page chat) ·
+[komorebi.shomasawa.com](https://komorebi.shomasawa.com) (a fictional clinic's site with the one-tag chat widget).
+Questions and answers are in Japanese; try 「60分の料金は？」 or 「腰痛は何回で治りますか？」.
+
+![The fictional clinic's homepage on a phone (left), and the chat widget answering 「60分の料金は？」 (right)](docs/img/widget-phone.webp)
+
+| | |
+|---|---|
+| **Answer quality** | 70 self-written questions (50 original + 20 held-out) on one fictional clinic, every answer hand-labeled. The final configuration scored 100% / 100% (original / held-out) in all 3 repeats, up from 98% / 85% at the M2 baseline (1 run) |
+| **Safety** | Symptom questions are always redirected to a medical institution. A guardrail removes unsupported "we don't offer that" claims; replayed over 980 hand-labeled answers, it had 0 false positives on correct ones |
+| **Production** | ~2 s median per answer, per-IP rate limits and daily caps, no visitor IPs logged, a strict CSP; only the clinic's own site may frame the widget |
+| **Ops** | Push a tag → image on GHCR → the EC2 host pulls and deploys itself, with automatic rollback. GitHub holds no AWS credentials |
+
+**How this was built:** with Claude Code as a pair programmer. I wrote the clinic dataset and eval questions,
+hand-labeled 1,340 answers, and reviewed every plan and design decision; [CLAUDE.md](CLAUDE.md) is the working brief.
+
+**Worth a look**
+- [Milestone 2 results](#milestone-2--retrieval-quality-on-a-harder-benchmark): a cross-encoder reranker raised
+  section recall@1 by 8–12 points but dropped held-out answer accuracy from 85% to 75% at six times the latency,
+  so it wasn't adopted.
+- [Failures found and fixed](#failures-found-and-fixed-1): the most dangerous error was a confident guess
+  (「ギフト券のご用意はございません」 from an expired campaign), fixed by a prompt rule plus a deterministic guardrail.
+- [Deploy](#deploy-aws): Terraform, Caddy and pull-based releases, plus a measured latency fix
+  ([10.3 s → 1.8 s median](#resize-to-t3medium-2026-10-27)).
+
+**Stack:** Python · FastAPI · Postgres + pgvector · bge-m3 embeddings (CPU) · Claude Haiku 5.5 ·
+Docker Compose + Caddy on EC2 · Terraform · Cloudflare DNS · GitHub Actions
+
+**Status:** M1 and M2 complete. M4 (public demo) is live at v0.5.0, with LINE integration and a demo video next.
+See the [Roadmap](#roadmap).
 
 ## How it works
 
