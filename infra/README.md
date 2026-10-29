@@ -96,10 +96,3 @@ This account's SCP forbids IAM OIDC providers, so GitHub Actions has no way into
 4. On failure, the digest goes to `state/failed-digest` and is not retried, and the previous digest is redeployed. Every deploy, failure and rollback is a line in `state/history.log` and in `journalctl -u frontdesk-deploy`.
 
 `pull-deploy.sh` itself only changes through a Session Manager shell (or a new instance). Everything else ships inside the image.
-
-## Your parts (TODO)
-
-- **The security group** in `network.tf`.
-- **The swap section** in `user_data.sh.tftpl`.
-
-The comments in each file say what's needed and how to check it. Until the security group exists, `terraform validate` reports `Reference to undeclared resource "aws_security_group" "web"`.

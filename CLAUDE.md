@@ -79,7 +79,8 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
 ## Default pipeline
 question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu_prices shown in full if any of its chunks is hit) → Claude (prompt v2, JSON: answer/behavior/sources) → guardrail → reply.
 
-## AWS account constraints (Settings project account)
+## AWS account constraints
+An AWS Settings project account (new-account experience) with fixed SCPs.
 - **SCP limits:**
   - `iam:*Provider*` is denied, so there are no OIDC or SAML providers and GitHub can't assume a role.
   - IAM paths under `/managed/` are reserved; keep roles on path `/`.
@@ -101,7 +102,7 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 
 ## Environment (Windows)
 - PowerShell 5.1 is the main shell; Git Bash is also available.
-- Python: the conda env `frontdesk-ai` at `C:\Users\Shoma\miniconda3\envs\frontdesk-ai\python.exe`. There is no system Python on PATH, so call this path directly.
+- Python: the conda env `frontdesk-ai`. There is no system Python on PATH, so call the env's `python.exe` directly.
 - Set `PYTHONIOENCODING=utf-8` for Japanese output. Don't pipe JSON through PowerShell 5.1, because it adds a BOM.
 - Terraform: use the user's install, or `docker run --rm -v <infra>:/infra -w /infra hashicorp/terraform:1.17.0 fmt|validate` (no credentials needed). Set `MSYS_NO_PATHCONV=1` for `docker run` from Git Bash.
 - Multi-file patch scripts: write them to a file with the Write tool and then run them. Inline heredocs in the Bash tool can mangle backslashes (`\\r` became a carriage return once). To check for stray `\r`, read files with `newline=""`, because Python's `read_text` silently converts it.
@@ -152,7 +153,14 @@ question → bge-m3 → dense top-5 (pgvector) → small-docs expansion (01_menu
 
 ## Before going public
 Checklist for when the repo is made public (it is private for now):
-- [ ] Restore the full-page chat's "About this demo" link to the repo (`src/static/index.html`; removed while private), and flip the assertion in `tests/test_web.py::test_index_serves_the_chat_page`.
+- [x] gitleaks over the full history with the CI-pinned image (v8.30.1): no leaks. (v8.24.3 ignores `[[allowlists]]` and flags the `11_column_aftercare` doc ID; false positives.)
+- [x] Review `eval/`, `notes/` and the docs for personal notes, local paths and emails. `label_note` fields are kept as labeling evidence; the commit-author email stays in history (rewriting would change every SHA cited in eval summaries, tags and `/health`). New commits use the noreply address.
+- **After the user makes the repo public:**
+  - [ ] Restore the full-page chat's "About this demo" link to the repo (`src/static/index.html`; removed while private), flip the assertion in `tests/test_web.py::test_index_serves_the_chat_page`, update README "Web chat", and release it (v0.5.1).
+  - [ ] Tag ruleset `release-tags` (Settings → Rules → Rulesets; not available on private repos on the Free plan): targets `v*` and `milestone-*`, Restrict updates + Restrict deletions, no bypass. Rollback re-runs old runs and never moves a tag, so it still works.
+  - [ ] Branch ruleset for `main`: Block force pushes + Restrict deletions, no bypass. No required status checks (pushes go straight to `main`).
+  - [ ] Settings → Code security: secret scanning with push protection, Dependabot alerts.
+  - [ ] Pin the repo on the GitHub profile. (The GHCR package is already public.)
 
 ## Commands
 ```

@@ -1,5 +1,7 @@
 # Milestone 2 — harder benchmark (data drop)
 
+*Data-drop note given to the coding agent (Claude Code) for M2: where the new files go and what to change.*
+
 Copy the files into the repo:
 
 | File in this zip | Destination | Action |
