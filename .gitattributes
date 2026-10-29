@@ -12,3 +12,5 @@ deploy/** text eol=lf
 infra/host/** text eol=lf
 # Images shipped with the demo homepage are binary (after deploy/** so this wins).
 *.webp binary
+# The LINE rich menu image (scripts/line_rich_menu.py).
+*.png binary
