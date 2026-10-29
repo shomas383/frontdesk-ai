@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
@@ -77,6 +77,9 @@ class AppSettings:
     cors_origins: tuple[str, ...] = ()
     demo_autosend: bool = False  # let the web page auto-send ?demo=q1|q2 (screenshots / demo video only)
     extra_frame_ancestors: tuple[str, ...] = ()  # local testing only: more sites that may frame /embed
+    # LINE Messaging API (src/line.py); /line/webhook exists only when both are set. Kept out of repr.
+    line_channel_secret: str = field(default="", repr=False)
+    line_channel_access_token: str = field(default="", repr=False)
 
 
 def get_app_settings() -> AppSettings:
@@ -93,4 +96,6 @@ def get_app_settings() -> AppSettings:
         cors_origins=_list_env("CORS_ORIGINS"),
         demo_autosend=_bool_env("DEMO_AUTOSEND"),
         extra_frame_ancestors=_list_env("EXTRA_FRAME_ANCESTORS"),
+        line_channel_secret=os.getenv("LINE_CHANNEL_SECRET", "").strip(),
+        line_channel_access_token=os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip(),
     )

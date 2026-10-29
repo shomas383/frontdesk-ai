@@ -7,6 +7,7 @@ The access log is off because it prints client IPs; each request is logged as on
 POST /chat {tenant, message} -> {answer, behavior, sources};  GET /health
 GET / serves the web chat (src/static/); GET /api/config gives it the tenant, labels and limits.
 GET /embed?tenant=... is the same chat in a compact layout, shown in an iframe by widget.js.
+POST /line/webhook is the LINE Official Account (src/line.py), when its secrets are set.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from src.answer import FALLBACK_ANSWER, answer_question
 from src.config import DATA_DIR, AppSettings, get_app_settings
 from src.framing import frame_ancestors
 from src.limits import RateLimiter, now_jst
+from src.line import LineClient, register_line_routes
 from src.llm import LLMProvider, get_provider
 from src.pricing import estimate_cost_usd
 from src.prompts import prompt_hash
@@ -135,6 +137,9 @@ def create_app(
     usage: Any = None,
     limiter: RateLimiter | None = None,
     warm: bool = True,
+    line_client: LineClient | None = None,
+    line_limiter: RateLimiter | None = None,
+    line_clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     settings = settings or get_app_settings()
     usage = usage or PostgresUsage()
@@ -154,7 +159,8 @@ def create_app(
                   rate_limit_per_minute=settings.rate_limit_per_minute,
                   rate_limit_per_day=settings.rate_limit_per_day,
                   daily_question_cap=settings.daily_question_cap,
-                  daily_token_budget=settings.daily_token_budget, app_today=settings.app_today or None)
+                  daily_token_budget=settings.daily_token_budget, app_today=settings.app_today or None,
+                  line_enabled=line_enabled)
         yield
 
     app = FastAPI(title="frontdesk-ai", lifespan=lifespan)
@@ -280,6 +286,8 @@ def create_app(
             raise HTTPException(429, detail=RATE_LIMITED_DETAIL, headers={"Retry-After": str(retry_after)})
         return ask(tenant, message, "web")
 
+    line_enabled = register_line_routes(app, settings, ask, log_event, load_site(settings.allowed_tenants[0]),
+                                        line_client, line_limiter, line_clock)
     return app
 
 
