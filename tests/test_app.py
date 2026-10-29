@@ -275,6 +275,7 @@ def test_request_log_fields_and_privacy(retrieved, caplog):
     log = _chat_logs(caplog)[-1]
     assert log["question"] == "予約したいです。[電話番号] か [メール] に連絡ください。60分はいくら？"
     assert log["behavior"] == "answer" and log["sources"] == ["01_menu_prices"]
+    assert log["channel"] == "web"
     assert log["guardrail_fired"] is False
     assert log["input_tokens"] == 3000 and log["output_tokens"] == 100
     assert log["cost_usd"] == pytest.approx((3000 * 0.10 + 100 * 0.50) / 1e6)

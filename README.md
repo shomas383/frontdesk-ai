@@ -300,7 +300,7 @@ python scripts/browser_check.py --site https://komorebi.shomasawa.com        # l
 ### Logs and retention
 
 Each request is logged as one JSON line on stdout:
-- `question`, `tenant`, `outcome` (`answered`/`rate_limited`/`cap`/`budget`/`error`/`invalid`)
+- `channel` (`web`), `question`, `tenant`, `outcome` (`answered`/`rate_limited`/`cap`/`budget`/`error`/`invalid`)
 - `behavior`, `sources`, `guardrail_fired`, `guardrail_removed`
 - `latency_ms`, `llm_latency_ms`, `input_tokens`, `output_tokens`, `cost_usd`, `error`
 

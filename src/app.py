@@ -223,34 +223,21 @@ def create_app(
                 "model": app.state.provider.model_id, **build_info()}
         return JSONResponse(body, status_code=200 if db_status == "ok" else 503)
 
-    @app.post("/chat", response_model=ChatResponse)
-    def chat(req: ChatRequest, request: Request) -> ChatResponse:
+    def ask(tenant: str, message: str, channel: str,
+            budget_answer: str = BUDGET_FALLBACK_ANSWER) -> ChatResponse:
+        """Answer one validated, rate-limited question: the daily caps (shared by every channel), the
+        eval's answer path and one log line. `budget_answer` is the channel's wording for a used-up cap."""
         started = time.perf_counter()
-        tenant, message = req.tenant, req.message.strip()
-        if tenant not in settings.allowed_tenants:
-            log_event(event="chat", outcome="invalid", reason="unknown_tenant")
-            raise HTTPException(404, detail="unknown tenant")
-        if not message or len(message) > settings.max_message_chars:
-            log_event(event="chat", tenant=tenant, outcome="invalid",
-                      reason="empty" if not message else "too_long", message_chars=len(message))
-            detail = EMPTY_MESSAGE_DETAIL if not message else (
-                f"ご質問は{settings.max_message_chars}文字以内でご入力ください。")
-            raise HTTPException(422, detail=detail)
-
-        allowed, retry_after = limiter.check(client_ip(request))
-        if not allowed:
-            log_event(event="chat", tenant=tenant, outcome="rate_limited")
-            raise HTTPException(429, detail=RATE_LIMITED_DETAIL, headers={"Retry-After": str(retry_after)})
-
         day = now_jst().date()  # budgets follow the real JST day even when APP_TODAY pins the docs' date
-        fields: dict[str, Any] = {"event": "chat", "tenant": tenant, "question": redact_pii(message)}
+        fields: dict[str, Any] = {"event": "chat", "channel": channel, "tenant": tenant,
+                                  "question": redact_pii(message)}
         try:
             with connect() as conn:
                 refused = usage.reserve(conn, day, settings.daily_question_cap, settings.daily_token_budget)
                 if refused:
                     log_event(**fields, outcome=refused, behavior="handoff", sources=[],
                               latency_ms=int((time.perf_counter() - started) * 1000))
-                    return ChatResponse(answer=BUDGET_FALLBACK_ANSWER, behavior="handoff", sources=[])
+                    return ChatResponse(answer=budget_answer, behavior="handoff", sources=[])
 
                 provider = app.state.provider
                 result = answer_question(conn, provider, tenant, message, today())
@@ -273,6 +260,25 @@ def create_app(
             error=result.error,
         )
         return ChatResponse(answer=result.answer, behavior=result.behavior, sources=result.sources)
+
+    @app.post("/chat", response_model=ChatResponse)
+    def chat(req: ChatRequest, request: Request) -> ChatResponse:
+        tenant, message = req.tenant, req.message.strip()
+        if tenant not in settings.allowed_tenants:
+            log_event(event="chat", channel="web", outcome="invalid", reason="unknown_tenant")
+            raise HTTPException(404, detail="unknown tenant")
+        if not message or len(message) > settings.max_message_chars:
+            log_event(event="chat", channel="web", tenant=tenant, outcome="invalid",
+                      reason="empty" if not message else "too_long", message_chars=len(message))
+            detail = EMPTY_MESSAGE_DETAIL if not message else (
+                f"ご質問は{settings.max_message_chars}文字以内でご入力ください。")
+            raise HTTPException(422, detail=detail)
+
+        allowed, retry_after = limiter.check(client_ip(request))
+        if not allowed:
+            log_event(event="chat", channel="web", tenant=tenant, outcome="rate_limited")
+            raise HTTPException(429, detail=RATE_LIMITED_DETAIL, headers={"Retry-After": str(retry_after)})
+        return ask(tenant, message, "web")
 
     return app
 
