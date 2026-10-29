@@ -1,5 +1,5 @@
-# gitleaks (run by .github/workflows/test.yml over the full history): the default rules plus one
-# narrow allowlist.
+# gitleaks (run by .github/workflows/test.yml over the full history): the default rules plus two
+# narrow allowlists. .gitleaksignore lists single findings by fingerprint.
 [extend]
 useDefault = true
 
@@ -9,3 +9,13 @@ condition = "AND"
 paths = ['''^eval/''']
 regexTarget = "secret"
 regexes = ['''^[0-9]{2}_[a-z0-9_]+$''']
+
+[[allowlists]]
+description = "Dummy LINE test fixtures (made-up secret and a signature computed from it), not real credentials"
+condition = "AND"
+paths = ['''^tests/test_line_signature\.py$''']
+regexTarget = "secret"
+regexes = [
+  '''^8f2b1c0d9e7a6b5c4d3e2f1a0b9c8d7e$''',
+  '''^uQS7t/2ta8hKxuL2iSgfl6NCpO4RwSrXBNKoeE9Wkks=$''',
+]

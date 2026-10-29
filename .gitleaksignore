@@ -1,0 +1,5 @@
+# Findings gitleaks may skip, by fingerprint (commit:file:rule:line). Keep each one narrow and explained.
+# Dummy test fixture, not a real credential: the made-up LINE channel secret in the signature spec.
+72004602ebc592f25bbea22d669508684279ab2d:tests/test_line_signature.py:generic-api-key:15
+# Dummy test fixture, not a real credential: a signature computed from that made-up data with an empty key.
+72004602ebc592f25bbea22d669508684279ab2d:tests/test_line_signature.py:generic-api-key:27

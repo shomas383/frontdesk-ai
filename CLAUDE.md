@@ -190,6 +190,7 @@ python -m src.eval --resummarize eval/runs/<run>.jsonl
 python -m src.eval --aggregate eval/runs/<ts>_<name>.repeats.json   # after labeling repeats; no API calls
 python -m src.compare eval/runs/<base>.jsonl eval/runs/<new>.jsonl [--carry-labels]
 pytest
+MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/repo" zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --config /repo/.gitleaks.toml --redact --no-banner -v   # full history, as CI (Git Bash)
 python scripts/browser_check.py [--webkit] [--site https://komorebi.shomasawa.com]   # Playwright; dev only
 git tag vX.Y.Z && git push origin vX.Y.Z                            # release (deploy.yml → GHCR :prod → host)
 cd infra; terraform plan -out tf.plan; terraform apply tf.plan      # user runs these (needs aws login + CLOUDFLARE_API_TOKEN)
@@ -222,6 +223,8 @@ aws ec2 stop-instances|start-instances --region us-east-2 --instance-ids <id>
 - Patterns labeled **correct:** restating that a dated campaign has ended; a terse but correct handoff; extra correct facts.
 
 ## Rules
+- **Before saying anything is ready to push:** commit, then run `pytest` and the CI-pinned gitleaks over the **full history** (the docker command under Commands; the same image digest as `test.yml`), and report both results. 0 leaks is required: CI scans every commit, so a finding in an already-pushed commit breaks `main` until it's fixed.
+  - A finding in a fake test fixture is fixed narrowly: a `.gitleaksignore` line for that commit's fingerprint, plus a `[[allowlists]]` entry in `.gitleaks.toml` scoped to the file's path **and** to the exact anchored values. Never a whole file, a directory or a generic pattern. Prefer fixture values gitleaks doesn't flag in the first place.
 - **Commit before any run you want to cite**, so that `git_dirty` is false (`eval/runs/` is excluded from the dirty check). Don't touch tracked or untracked files outside `eval/runs/` while a run is in progress.
 - **Don't resummarize old runs against new labels.** For example, runs from before the M2 FAQ split retrieved `06_faq#よくある質問`, which no longer exists. Cite their stored summaries instead; rescore in memory if a comparison needs it.
 - Gold labels: a question's `gold_chunks` must exist in the corpus and fall within its `sources` (enforced by tests). Ask before changing labels that a data note doesn't specify.
