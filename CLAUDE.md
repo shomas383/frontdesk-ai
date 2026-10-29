@@ -26,7 +26,7 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
     - app: ~0.8 GB serving with bge-m3 loaded, ~1.1 GB peak during the first-start ingest
     - Postgres: ~75 MB
     - image: 3.3 GB
-  - **Step 3 (deploy): complete (2026-10-27).** Live at https://demo.shomasawa.com, running **v0.4.1**. See README "Deploy (AWS)" (first-release table) and [infra/README.md](infra/README.md).
+  - **Step 3 (deploy): complete (2026-10-27).** Live at https://demo.shomasawa.com; Step 3 ended on **v0.4.1** (now **v0.5.0**, Step 3.5). See README "Deploy (AWS)" (first-release table) and [infra/README.md](infra/README.md).
     - **Verified live:**
       - smoke test 3/3
       - per-IP 429 after 10 requests
@@ -60,13 +60,19 @@ A Japanese AI front desk for small clinics (整体院・鍼灸院). It answers f
       3. If that fails, it auto-rolls back to the last good digest.
       - GitHub has no AWS credentials.
 
-  - **Step 3.5 (website widget + demo clinic homepage): built, release pending (v0.5.0).** See README "Embedding the widget".
+  - **Step 3.5 (website widget + demo clinic homepage): complete (2026-10-28), released as v0.5.0.** See README "Embedding the widget".
+    - **Verified live:**
+      - `/health` v0.5.0 (`bbaca68`)
+      - deploy smoke: framing headers on `/` and `/embed`, the homepage, q01/q36/q44
+      - framing headers checked by hand with GET
+      - phone and desktop by hand; `browser_check.py --site https://komorebi.shomasawa.com` 31/31
+      - CloudWatch IP audit clean, including Caddy's tls-alpn-01 validation lines for komorebi
     - **Widget:** `GET /widget.js` (one `<script>` tag: `data-tenant`, `data-offset-bottom`, `window.FrontdeskWidget.open/close/toggle`) frames `GET /embed?tenant=…`, the compact chat. The widget's bar reads 「<clinic> AI受付」; embed mode greets as AI受付, and the full page keeps AIフロントデスク.
     - **Framing:** only `site.json` `embed_origins` may frame `/embed` (CSP `frame-ancestors`, validated in `src/framing.py`). Everything else sends `frame-ancestors 'none'` + `X-Frame-Options: DENY`. This doesn't protect `/chat` itself; that stays covered by the rate limits and caps. CORS stays off.
     - **Homepage:** `deploy/sites/komorebi`, served by our Caddy at komorebi.shomasawa.com, with a Cloudflare record `cloudflare_dns_record.homepage`. Its content comes from the docs only; tests check prices, hours, the hours grid, and the absence of claim words.
     - **Suggestion chips** are per mode in `site.json` (`page`: showcase; `embed`: everyday). The five embed chips were checked once through the real pipeline: all `answer`.
     - **Answer path unchanged**, so no eval rerun.
-    - **Release steps (user):** `terraform plan` (expect 1 to add) → apply → `nslookup komorebi.shomasawa.com` → push main → tag v0.5.0 → smoke (framing headers + homepage) → `python scripts/browser_check.py --site https://komorebi.shomasawa.com`.
+    - **Release order:** `terraform plan` (1 to add) → apply → `nslookup komorebi.shomasawa.com` → push main → tag v0.5.0 → smoke (framing headers + homepage) → `python scripts/browser_check.py --site https://komorebi.shomasawa.com`. DNS goes first so Caddy's first certificate attempt succeeds.
 
 ## Backlog (not started)
 - **Unneeded staff follow-up:** answers that the official docs fully cover sometimes still add 「スタッフが確認のうえご案内」, which makes a correct answer sound uncertain. Example: 6,600円→7,150円, with `behavior` still `answer`.

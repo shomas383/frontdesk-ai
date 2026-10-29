@@ -259,6 +259,13 @@ python scripts/browser_check.py                                             # lo
 python scripts/browser_check.py --site https://komorebi.shomasawa.com        # live; sends no question
 ```
 
+**Verified live (v0.5.0, 2026-10-28):**
+- the deploy's smoke test passed: framing headers on `/` and `/embed`, the homepage, and the 3 questions
+- the framing headers, checked by hand with GET
+- the widget on a phone and on desktop, checked by hand
+- the live browser check passed 31 of 31 checks
+- still no visitor IPs in CloudWatch, including in Caddy's certificate-validation lines for the new domain
+
 ### Logs and retention
 
 Each request is logged as one JSON line on stdout:
